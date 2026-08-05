@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alarmac - Sistema de Gestión</title>
+
+<!-- Firebase (versión "compat", más fácil de usar sin herramientas de compilación) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  /* Colores principales de la marca: azul rey y amarillo */
+  :root {
+    --azul-rey: #1e3a8a;
+    --amarillo: #fbbf24;
+    --blanco: #ffffff;
+    --gris-claro: #f3f4f6;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: var(--gris-claro);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .caja-login {
+    background: var(--blanco);
+    padding: 30px 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    width: 100%;
+    max-width: 380px;
+    text-align: center;
+  }
+
+  .caja-login h1 {
+    color: var(--azul-rey);
+    margin-bottom: 5px;
+  }
+
+  .caja-login p {
+    color: #555;
+    margin-top: 0;
+    margin-bottom: 25px;
+  }
+
+  input {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+  }
+
+  button {
+    width: 100%;
+    padding: 13px;
+    background: var(--azul-rey);
+    color: var(--blanco);
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  button:hover { opacity: 0.9; }
+
+  #mensaje-error {
+    color: #dc2626;
+    margin-top: 10px;
+    font-size: 14px;
+  }
+
+  /* Pantalla que se muestra después de iniciar sesión */
+  .pantalla-bienvenida {
+    display: none;
+    text-align: center;
+  }
+
+  .pantalla-bienvenida h2 {
+    color: var(--azul-rey);
+  }
+
+  .btn-amarillo {
+    background: var(--amarillo);
+    color: var(--azul-rey);
+    margin-top: 15px;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ===== PANTALLA DE LOGIN ===== -->
+  <div class="caja-login" id="pantalla-login">
+    <h1>Alarmac</h1>
+    <p>Sistema de gestión técnica</p>
+
+    <input type="email" id="campo-correo" placeholder="Correo electrónico">
+    <input type="password" id="campo-clave" placeholder="Contraseña">
+    <button onclick="iniciarSesion()">Iniciar sesión</button>
+
+    <p id="mensaje-error"></p>
+  </div>
+
+  <!-- ===== PANTALLA DE BIENVENIDA (temporal, luego la reemplazamos por el panel real) ===== -->
+  <div class="caja-login pantalla-bienvenida" id="pantalla-bienvenida">
+    <h2>¡Bienvenido!</h2>
+    <p id="texto-usuario"></p>
+    <button class="btn-amarillo" onclick="cerrarSesion()">Cerrar sesión</button>
+  </div>
+
+<script>
+  // ===== CONFIGURACIÓN DE TU PROYECTO FIREBASE =====
+  // Estos datos conectan esta página con tu base de datos "Alarmac"
+  const firebaseConfig = {
+    apiKey: "AIzaSyBEYR4xdSMCCzrHDCAvNG00VKAuBOMDwG0",
+    authDomain: "alarmac-834d2.firebaseapp.com",
+    projectId: "alarmac-834d2",
+    storageBucket: "alarmac-834d2.firebasestorage.app",
+    messagingSenderId: "170123480246",
+    appId: "1:170123480246:web:6d5373b7da2b9baf202a17"
+  };
+
+  // Iniciamos la conexión con Firebase
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+
+  // Función que se ejecuta al tocar "Iniciar sesión"
+  function iniciarSesion() {
+    const correo = document.getElementById('campo-correo').value;
+    const clave = document.getElementById('campo-clave').value;
+    const mensajeError = document.getElementById('mensaje-error');
+
+    mensajeError.textContent = ""; // limpiamos errores anteriores
+
+    auth.signInWithEmailAndPassword(correo, clave)
+      .then((resultado) => {
+        // Login correcto: mostramos la pantalla de bienvenida
+        document.getElementById('pantalla-login').style.display = 'none';
+        document.getElementById('pantalla-bienvenida').style.display = 'block';
+        document.getElementById('texto-usuario').textContent = 'Sesión iniciada como: ' + resultado.user.email;
+      })
+      .catch((error) => {
+        // Login incorrecto: mostramos el motivo
+        mensajeError.textContent = "Error: correo o contraseña incorrectos.";
+      });
+  }
+
+  // Función para cerrar sesión
+  function cerrarSesion() {
+    auth.signOut().then(() => {
+      document.getElementById('pantalla-bienvenida').style.display = 'none';
+      document.getElementById('pantalla-login').style.display = 'block';
+      document.getElementById('campo-correo').value = '';
+      document.getElementById('campo-clave').value = '';
+    });
+  }
+</script>
+
+</body>
+</html>
