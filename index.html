@@ -5,18 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Alarmac - Sistema de Gestión</title>
 
-<!-- Firebase (versión "compat", más fácil de usar sin herramientas de compilación) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
 <style>
-  /* Colores principales de la marca: azul rey y amarillo */
   :root {
     --azul-rey: #1e3a8a;
     --amarillo: #fbbf24;
     --blanco: #ffffff;
     --gris-claro: #f3f4f6;
+    --gris-borde: #e5e7eb;
+    --verde: #16a34a;
+    --naranja: #ea580c;
+    --gris-texto: #555;
   }
 
   * { box-sizing: border-box; }
@@ -25,13 +27,10 @@
     margin: 0;
     font-family: Arial, sans-serif;
     background: var(--gris-claro);
-    display: flex;
-    justify-content: center;
-    align-items: center;
     min-height: 100vh;
-    padding: 20px;
   }
 
+  /* ===== PANTALLA DE LOGIN ===== */
   .caja-login {
     background: var(--blanco);
     padding: 30px 25px;
@@ -40,18 +39,11 @@
     width: 100%;
     max-width: 380px;
     text-align: center;
+    margin: 60px auto;
   }
 
-  .caja-login h1 {
-    color: var(--azul-rey);
-    margin-bottom: 5px;
-  }
-
-  .caja-login p {
-    color: #555;
-    margin-top: 0;
-    margin-bottom: 25px;
-  }
+  .caja-login h1 { color: var(--azul-rey); margin-bottom: 5px; }
+  .caja-login p { color: var(--gris-texto); margin-top: 0; margin-bottom: 25px; }
 
   input {
     width: 100%;
@@ -63,40 +55,83 @@
   }
 
   button {
-    width: 100%;
-    padding: 13px;
+    padding: 13px 20px;
     background: var(--azul-rey);
     color: var(--blanco);
     border: none;
     border-radius: 8px;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: bold;
     cursor: pointer;
   }
 
+  button.ancho { width: 100%; }
   button:hover { opacity: 0.9; }
+  button.secundario { background: var(--amarillo); color: var(--azul-rey); }
+  button.pequeno { padding: 8px 14px; font-size: 13px; }
 
-  #mensaje-error {
-    color: #dc2626;
-    margin-top: 10px;
-    font-size: 14px;
+  #mensaje-error { color: #dc2626; margin-top: 10px; font-size: 14px; }
+
+  /* ===== ENCABEZADO DE LA APP (después de iniciar sesión) ===== */
+  .encabezado {
+    background: var(--azul-rey);
+    color: var(--blanco);
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
-  /* Pantalla que se muestra después de iniciar sesión */
-  .pantalla-bienvenida {
-    display: none;
-    text-align: center;
+  .encabezado h2 { margin: 0; font-size: 18px; }
+  .encabezado span { font-size: 13px; opacity: 0.85; }
+
+  .contenedor {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
   }
 
-  .pantalla-bienvenida h2 {
+  .tarjeta {
+    background: var(--blanco);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+
+  .tarjeta h3 {
+    margin: 0 0 6px 0;
     color: var(--azul-rey);
+    font-size: 16px;
   }
 
-  .btn-amarillo {
-    background: var(--amarillo);
-    color: var(--azul-rey);
-    margin-top: 15px;
+  .tarjeta p { margin: 3px 0; font-size: 14px; color: var(--gris-texto); }
+
+  .etiqueta-estado {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    margin-top: 6px;
   }
+
+  .estado-pendiente { background: var(--naranja); }
+  .estado-en_camino { background: #2563eb; }
+  .estado-en_progreso { background: #7c3aed; }
+  .estado-terminado { background: var(--verde); }
+
+  .titulo-seccion {
+    color: var(--azul-rey);
+    border-bottom: 2px solid var(--amarillo);
+    padding-bottom: 6px;
+    margin-top: 30px;
+  }
+
+  .oculto { display: none; }
+
+  #cargando { text-align: center; padding: 40px; color: var(--gris-texto); }
 </style>
 </head>
 <body>
@@ -105,24 +140,46 @@
   <div class="caja-login" id="pantalla-login">
     <h1>Alarmac</h1>
     <p>Sistema de gestión técnica</p>
-
     <input type="email" id="campo-correo" placeholder="Correo electrónico">
     <input type="password" id="campo-clave" placeholder="Contraseña">
-    <button onclick="iniciarSesion()">Iniciar sesión</button>
-
+    <button class="ancho" onclick="iniciarSesion()">Iniciar sesión</button>
     <p id="mensaje-error"></p>
   </div>
 
-  <!-- ===== PANTALLA DE BIENVENIDA (temporal, luego la reemplazamos por el panel real) ===== -->
-  <div class="caja-login pantalla-bienvenida" id="pantalla-bienvenida">
-    <h2>¡Bienvenido!</h2>
-    <p id="texto-usuario"></p>
-    <button class="btn-amarillo" onclick="cerrarSesion()">Cerrar sesión</button>
+  <div id="cargando" class="oculto">Cargando información...</div>
+
+  <!-- ===== APP PRINCIPAL (después de iniciar sesión) ===== -->
+  <div id="app-principal" class="oculto">
+    <div class="encabezado">
+      <div>
+        <h2 id="titulo-panel">Alarmac</h2>
+        <span id="texto-usuario"></span>
+      </div>
+      <button class="secundario pequeno" onclick="cerrarSesion()">Salir</button>
+    </div>
+
+    <div class="contenedor">
+
+      <!-- Panel de administrador -->
+      <div id="panel-admin" class="oculto">
+        <h3 class="titulo-seccion">Clientes</h3>
+        <div id="lista-clientes"></div>
+
+        <h3 class="titulo-seccion">Servicios</h3>
+        <div id="lista-servicios-admin"></div>
+      </div>
+
+      <!-- Panel de técnico -->
+      <div id="panel-tecnico" class="oculto">
+        <h3 class="titulo-seccion">Mis servicios asignados</h3>
+        <div id="lista-servicios-tecnico"></div>
+      </div>
+
+    </div>
   </div>
 
 <script>
-  // ===== CONFIGURACIÓN DE TU PROYECTO FIREBASE =====
-  // Estos datos conectan esta página con tu base de datos "Alarmac"
+  // ===== CONFIGURACIÓN DE FIREBASE =====
   const firebaseConfig = {
     apiKey: "AIzaSyBEYR4xdSMCCzrHDCAvNG00VKAuBOMDwG0",
     authDomain: "alarmac-834d2.firebaseapp.com",
@@ -132,38 +189,159 @@
     appId: "1:170123480246:web:6d5373b7da2b9baf202a17"
   };
 
-  // Iniciamos la conexión con Firebase
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
+  const db = firebase.firestore();
 
-  // Función que se ejecuta al tocar "Iniciar sesión"
+  // Nombres "bonitos" para mostrar los estados
+  const nombresEstado = {
+    pendiente: "Pendiente",
+    en_camino: "En camino",
+    en_progreso: "En progreso",
+    terminado: "Terminado"
+  };
+
+  // ===== LOGIN =====
   function iniciarSesion() {
     const correo = document.getElementById('campo-correo').value;
     const clave = document.getElementById('campo-clave').value;
     const mensajeError = document.getElementById('mensaje-error');
-
-    mensajeError.textContent = ""; // limpiamos errores anteriores
+    mensajeError.textContent = "";
 
     auth.signInWithEmailAndPassword(correo, clave)
-      .then((resultado) => {
-        // Login correcto: mostramos la pantalla de bienvenida
-        document.getElementById('pantalla-login').style.display = 'none';
-        document.getElementById('pantalla-bienvenida').style.display = 'block';
-        document.getElementById('texto-usuario').textContent = 'Sesión iniciada como: ' + resultado.user.email;
-      })
-      .catch((error) => {
-        // Login incorrecto: mostramos el motivo
+      .catch(() => {
         mensajeError.textContent = "Error: correo o contraseña incorrectos.";
       });
   }
 
-  // Función para cerrar sesión
   function cerrarSesion() {
-    auth.signOut().then(() => {
-      document.getElementById('pantalla-bienvenida').style.display = 'none';
-      document.getElementById('pantalla-login').style.display = 'block';
-      document.getElementById('campo-correo').value = '';
-      document.getElementById('campo-clave').value = '';
+    auth.signOut();
+  }
+
+  // ===== DETECTAR CUANDO ALGUIEN INICIA O CIERRA SESIÓN =====
+  auth.onAuthStateChanged(async (usuario) => {
+    if (usuario) {
+      // Hay sesión iniciada: ocultamos login y mostramos "cargando"
+      document.getElementById('pantalla-login').classList.add('oculto');
+      document.getElementById('cargando').classList.remove('oculto');
+
+      // Buscamos la info de este usuario en Firestore (colección "usuarios")
+      const doc = await db.collection('usuarios').doc(usuario.uid).get();
+
+      document.getElementById('cargando').classList.add('oculto');
+      document.getElementById('app-principal').classList.remove('oculto');
+
+      if (doc.exists) {
+        const datos = doc.data();
+        document.getElementById('texto-usuario').textContent =
+          datos.nombre + ' (' + datos.rol + ')';
+
+        if (datos.rol === 'administrador') {
+          document.getElementById('titulo-panel').textContent = 'Panel de Administrador';
+          document.getElementById('panel-admin').classList.remove('oculto');
+          cargarClientes();
+          cargarServiciosAdmin();
+        } else {
+          document.getElementById('titulo-panel').textContent = 'Mis Trabajos';
+          document.getElementById('panel-tecnico').classList.remove('oculto');
+          cargarServiciosTecnico(usuario.uid);
+        }
+      } else {
+        document.getElementById('texto-usuario').textContent =
+          'Usuario sin perfil configurado (' + usuario.email + ')';
+      }
+
+    } else {
+      // No hay sesión: mostramos el login
+      document.getElementById('app-principal').classList.add('oculto');
+      document.getElementById('cargando').classList.add('oculto');
+      document.getElementById('pantalla-login').classList.remove('oculto');
+    }
+  });
+
+  // ===== CARGAR CLIENTES (solo administrador) =====
+  async function cargarClientes() {
+    const contenedor = document.getElementById('lista-clientes');
+    contenedor.innerHTML = 'Cargando clientes...';
+
+    const snapshot = await db.collection('Clientes').get();
+
+    if (snapshot.empty) {
+      contenedor.innerHTML = '<p>No hay clientes registrados todavía.</p>';
+      return;
+    }
+
+    contenedor.innerHTML = '';
+    snapshot.forEach((doc) => {
+      const c = doc.data();
+      contenedor.innerHTML += `
+        <div class="tarjeta">
+          <h3>${c.nombre || '(sin nombre)'}</h3>
+          <p>${c.empresa || ''}</p>
+          <p>${c.direccion || ''}, ${c.barrio || ''}, ${c.ciudad || ''}</p>
+          <p>Tel: ${c.telefono || '-'} | Cel: ${c.celular || '-'}</p>
+          <p>${c.correo || ''}</p>
+          <p><em>${c.observaciones || ''}</em></p>
+        </div>
+      `;
+    });
+  }
+
+  // ===== CARGAR SERVICIOS (vista administrador, todos) =====
+  async function cargarServiciosAdmin() {
+    const contenedor = document.getElementById('lista-servicios-admin');
+    contenedor.innerHTML = 'Cargando servicios...';
+
+    const snapshot = await db.collection('servicios').get();
+
+    if (snapshot.empty) {
+      contenedor.innerHTML = '<p>No hay servicios registrados todavía.</p>';
+      return;
+    }
+
+    contenedor.innerHTML = '';
+    for (const doc of snapshot.docs) {
+      const s = doc.data();
+      const estadoClase = 'estado-' + (s.estado || 'pendiente');
+      const estadoTexto = nombresEstado[s.estado] || s.estado;
+
+      contenedor.innerHTML += `
+        <div class="tarjeta">
+          <h3>${s.tipoServicio || 'Servicio'}</h3>
+          <p>${s.observaciones || ''}</p>
+          <span class="etiqueta-estado ${estadoClase}">${estadoTexto}</span>
+        </div>
+      `;
+    }
+  }
+
+  // ===== CARGAR SERVICIOS (vista técnico, solo los suyos) =====
+  async function cargarServiciosTecnico(uid) {
+    const contenedor = document.getElementById('lista-servicios-tecnico');
+    contenedor.innerHTML = 'Cargando tus servicios...';
+
+    const snapshot = await db.collection('servicios')
+      .where('tecnicoId', '==', uid)
+      .get();
+
+    if (snapshot.empty) {
+      contenedor.innerHTML = '<p>No tienes servicios asignados por el momento.</p>';
+      return;
+    }
+
+    contenedor.innerHTML = '';
+    snapshot.forEach((doc) => {
+      const s = doc.data();
+      const estadoClase = 'estado-' + (s.estado || 'pendiente');
+      const estadoTexto = nombresEstado[s.estado] || s.estado;
+
+      contenedor.innerHTML += `
+        <div class="tarjeta">
+          <h3>${s.tipoServicio || 'Servicio'}</h3>
+          <p>${s.observaciones || ''}</p>
+          <span class="etiqueta-estado ${estadoClase}">${estadoTexto}</span>
+        </div>
+      `;
     });
   }
 </script>
