@@ -162,6 +162,56 @@
   .oculto { display: none; }
 
   #cargando { text-align: center; padding: 40px; color: var(--gris-texto); }
+
+  .boton-nuevo {
+    background: var(--verde);
+    margin-bottom: 12px;
+  }
+
+  .formulario {
+    background: var(--blanco);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 2px solid var(--amarillo);
+  }
+
+  .formulario label {
+    display: block;
+    font-size: 13px;
+    color: var(--gris-texto);
+    margin-top: 8px;
+    margin-bottom: 3px;
+  }
+
+  .formulario select {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 5px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 15px;
+  }
+
+  .fila-botones {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .fila-botones button { flex: 1; }
+  .boton-cancelar { background: #9ca3af; }
+
+  .selector-estado {
+    width: auto;
+    padding: 6px 10px;
+    margin-top: 8px;
+    margin-bottom: 0;
+    font-size: 13px;
+    display: inline-block;
+  }
+
+  #mensaje-form { font-size: 13px; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -201,9 +251,59 @@
       <!-- Panel de administrador -->
       <div id="panel-admin" class="oculto">
         <h3 class="titulo-seccion">Clientes</h3>
+        <button class="boton-nuevo" onclick="mostrarFormularioCliente()">+ Nuevo cliente</button>
+
+        <div class="formulario oculto" id="form-cliente">
+          <label>Nombre del cliente / negocio</label>
+          <input type="text" id="fc-nombre">
+          <label>Empresa</label>
+          <input type="text" id="fc-empresa">
+          <label>Dirección</label>
+          <input type="text" id="fc-direccion">
+          <label>Barrio</label>
+          <input type="text" id="fc-barrio">
+          <label>Ciudad</label>
+          <input type="text" id="fc-ciudad">
+          <label>Teléfono</label>
+          <input type="text" id="fc-telefono">
+          <label>Celular</label>
+          <input type="text" id="fc-celular">
+          <label>Correo</label>
+          <input type="email" id="fc-correo">
+          <label>Observaciones</label>
+          <input type="text" id="fc-observaciones">
+          <div class="fila-botones">
+            <button class="boton-cancelar" onclick="ocultarFormularioCliente()">Cancelar</button>
+            <button onclick="guardarCliente()">Guardar cliente</button>
+          </div>
+          <p id="mensaje-form"></p>
+        </div>
+
         <div id="lista-clientes"></div>
 
         <h3 class="titulo-seccion">Servicios</h3>
+        <button class="boton-nuevo" onclick="mostrarFormularioServicio()">+ Nuevo servicio</button>
+
+        <div class="formulario oculto" id="form-servicio">
+          <label>Cliente</label>
+          <select id="fs-cliente"></select>
+          <label>Técnico asignado</label>
+          <select id="fs-tecnico"></select>
+          <label>Tipo de servicio</label>
+          <select id="fs-tipo">
+            <option value="instalación">Instalación</option>
+            <option value="mantenimiento">Mantenimiento</option>
+            <option value="reparación">Reparación</option>
+          </select>
+          <label>Observaciones</label>
+          <input type="text" id="fs-observaciones">
+          <div class="fila-botones">
+            <button class="boton-cancelar" onclick="ocultarFormularioServicio()">Cancelar</button>
+            <button onclick="guardarServicio()">Guardar servicio</button>
+          </div>
+          <p id="mensaje-form-servicio"></p>
+        </div>
+
         <div id="lista-servicios-admin"></div>
       </div>
 
@@ -325,6 +425,128 @@
     }
   });
 
+  // ===== FORMULARIO: NUEVO CLIENTE =====
+  function mostrarFormularioCliente() {
+    document.getElementById('form-cliente').classList.remove('oculto');
+  }
+
+  function ocultarFormularioCliente() {
+    document.getElementById('form-cliente').classList.add('oculto');
+  }
+
+  async function guardarCliente() {
+    const mensaje = document.getElementById('mensaje-form');
+    const nombre = document.getElementById('fc-nombre').value.trim();
+
+    if (!nombre) {
+      mensaje.textContent = "El nombre del cliente es obligatorio.";
+      mensaje.style.color = '#dc2626';
+      return;
+    }
+
+    mensaje.textContent = "Guardando...";
+    mensaje.style.color = '#555';
+
+    try {
+      await db.collection('Clientes').add({
+        nombre: nombre,
+        empresa: document.getElementById('fc-empresa').value.trim(),
+        direccion: document.getElementById('fc-direccion').value.trim(),
+        barrio: document.getElementById('fc-barrio').value.trim(),
+        ciudad: document.getElementById('fc-ciudad').value.trim(),
+        telefono: document.getElementById('fc-telefono').value.trim(),
+        celular: document.getElementById('fc-celular').value.trim(),
+        correo: document.getElementById('fc-correo').value.trim(),
+        observaciones: document.getElementById('fc-observaciones').value.trim()
+      });
+
+      // Limpiar el formulario
+      ['fc-nombre','fc-empresa','fc-direccion','fc-barrio','fc-ciudad','fc-telefono','fc-celular','fc-correo','fc-observaciones']
+        .forEach(id => document.getElementById(id).value = '');
+
+      mensaje.textContent = "";
+      ocultarFormularioCliente();
+      cargarClientes(); // refrescamos la lista para que aparezca el nuevo
+    } catch (error) {
+      mensaje.textContent = "Error al guardar: " + error.message;
+      mensaje.style.color = '#dc2626';
+    }
+  }
+
+  // ===== FORMULARIO: NUEVO SERVICIO =====
+  async function mostrarFormularioServicio() {
+    document.getElementById('form-servicio').classList.remove('oculto');
+
+    // Llenamos el selector de clientes
+    const selectCliente = document.getElementById('fs-cliente');
+    selectCliente.innerHTML = '<option value="">Cargando clientes...</option>';
+    const clientesSnap = await db.collection('Clientes').get();
+    selectCliente.innerHTML = '';
+    clientesSnap.forEach((doc) => {
+      const c = doc.data();
+      selectCliente.innerHTML += `<option value="${doc.id}">${c.nombre}</option>`;
+    });
+    if (clientesSnap.empty) {
+      selectCliente.innerHTML = '<option value="">No hay clientes creados todavía</option>';
+    }
+
+    // Llenamos el selector de técnicos (usuarios con rol "tecnico")
+    const selectTecnico = document.getElementById('fs-tecnico');
+    selectTecnico.innerHTML = '<option value="">Cargando técnicos...</option>';
+    const tecnicosSnap = await db.collection('usuarios').where('rol', '==', 'tecnico').get();
+    selectTecnico.innerHTML = '';
+    tecnicosSnap.forEach((doc) => {
+      const t = doc.data();
+      selectTecnico.innerHTML += `<option value="${doc.id}">${t.nombre}</option>`;
+    });
+    if (tecnicosSnap.empty) {
+      selectTecnico.innerHTML = '<option value="">No hay técnicos creados todavía</option>';
+    }
+  }
+
+  function ocultarFormularioServicio() {
+    document.getElementById('form-servicio').classList.add('oculto');
+  }
+
+  async function guardarServicio() {
+    const mensaje = document.getElementById('mensaje-form-servicio');
+    const clienteId = document.getElementById('fs-cliente').value;
+    const tecnicoId = document.getElementById('fs-tecnico').value;
+
+    if (!clienteId || !tecnicoId) {
+      mensaje.textContent = "Debes seleccionar un cliente y un técnico.";
+      mensaje.style.color = '#dc2626';
+      return;
+    }
+
+    mensaje.textContent = "Guardando...";
+    mensaje.style.color = '#555';
+
+    try {
+      await db.collection('servicios').add({
+        clienteId: clienteId,
+        tecnicoId: tecnicoId,
+        tipoServicio: document.getElementById('fs-tipo').value,
+        observaciones: document.getElementById('fs-observaciones').value.trim(),
+        estado: 'pendiente'
+      });
+
+      document.getElementById('fs-observaciones').value = '';
+      mensaje.textContent = "";
+      ocultarFormularioServicio();
+      cargarServiciosAdmin();
+    } catch (error) {
+      mensaje.textContent = "Error al guardar: " + error.message;
+      mensaje.style.color = '#dc2626';
+    }
+  }
+
+  // ===== CAMBIAR EL ESTADO DE UN SERVICIO =====
+  async function cambiarEstadoServicio(servicioId, nuevoEstado) {
+    await db.collection('servicios').doc(servicioId).update({ estado: nuevoEstado });
+    cargarServiciosAdmin();
+  }
+
   // ===== CARGAR CLIENTES (solo administrador) =====
   async function cargarClientes() {
     const contenedor = document.getElementById('lista-clientes');
@@ -368,14 +590,32 @@
     contenedor.innerHTML = '';
     for (const doc of snapshot.docs) {
       const s = doc.data();
-      const estadoClase = 'estado-' + (s.estado || 'pendiente');
-      const estadoTexto = nombresEstado[s.estado] || s.estado;
+
+      // Buscamos el nombre del cliente y del técnico para mostrarlos, no solo su ID
+      let nombreCliente = '(cliente no encontrado)';
+      let nombreTecnico = '(técnico no encontrado)';
+
+      if (s.clienteId) {
+        const clienteDoc = await db.collection('Clientes').doc(s.clienteId).get();
+        if (clienteDoc.exists) nombreCliente = clienteDoc.data().nombre;
+      }
+      if (s.tecnicoId) {
+        const tecnicoDoc = await db.collection('usuarios').doc(s.tecnicoId).get();
+        if (tecnicoDoc.exists) nombreTecnico = tecnicoDoc.data().nombre;
+      }
+
+      const opciones = ['pendiente', 'en_camino', 'en_progreso', 'terminado']
+        .map(op => `<option value="${op}" ${s.estado === op ? 'selected' : ''}>${nombresEstado[op]}</option>`)
+        .join('');
 
       contenedor.innerHTML += `
         <div class="tarjeta">
-          <h3>${s.tipoServicio || 'Servicio'}</h3>
+          <h3>${s.tipoServicio || 'Servicio'} — ${nombreCliente}</h3>
+          <p>Técnico: ${nombreTecnico}</p>
           <p>${s.observaciones || ''}</p>
-          <span class="etiqueta-estado ${estadoClase}">${estadoTexto}</span>
+          <select class="selector-estado" onchange="cambiarEstadoServicio('${doc.id}', this.value)">
+            ${opciones}
+          </select>
         </div>
       `;
     }
