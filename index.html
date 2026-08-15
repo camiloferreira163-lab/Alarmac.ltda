@@ -71,6 +71,36 @@
   button.pequeno { padding: 8px 14px; font-size: 13px; }
 
   #mensaje-error { color: #dc2626; margin-top: 10px; font-size: 14px; }
+  #mensaje-info { color: var(--verde); margin-top: 10px; font-size: 14px; }
+
+  .campo-clave-contenedor {
+    position: relative;
+  }
+
+  .campo-clave-contenedor input { padding-right: 44px; }
+
+  .boton-ojo {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--gris-texto);
+  }
+
+  .link-olvide {
+    background: none;
+    color: var(--azul-rey);
+    font-size: 13px;
+    text-decoration: underline;
+    padding: 4px;
+    margin-top: -8px;
+    margin-bottom: 10px;
+  }
 
   /* ===== ENCABEZADO DE LA APP (después de iniciar sesión) ===== */
   .encabezado {
@@ -141,9 +171,17 @@
     <h1>Alarmac</h1>
     <p>Sistema de gestión técnica</p>
     <input type="email" id="campo-correo" placeholder="Correo electrónico">
-    <input type="password" id="campo-clave" placeholder="Contraseña">
+
+    <div class="campo-clave-contenedor">
+      <input type="password" id="campo-clave" placeholder="Contraseña">
+      <button type="button" class="boton-ojo" onclick="alternarClave()">👁️</button>
+    </div>
+
+    <button type="button" class="link-olvide" onclick="olvideClave()">¿Olvidaste tu contraseña?</button>
+
     <button class="ancho" onclick="iniciarSesion()">Iniciar sesión</button>
     <p id="mensaje-error"></p>
+    <p id="mensaje-info"></p>
   </div>
 
   <div id="cargando" class="oculto">Cargando información...</div>
@@ -216,6 +254,34 @@
 
   function cerrarSesion() {
     auth.signOut();
+  }
+
+  // Muestra u oculta la contraseña escrita (el "ojito")
+  function alternarClave() {
+    const campo = document.getElementById('campo-clave');
+    campo.type = campo.type === 'password' ? 'text' : 'password';
+  }
+
+  // Envía un correo para restablecer la contraseña
+  function olvideClave() {
+    const correo = document.getElementById('campo-correo').value;
+    const mensajeError = document.getElementById('mensaje-error');
+    const mensajeInfo = document.getElementById('mensaje-info');
+    mensajeError.textContent = "";
+    mensajeInfo.textContent = "";
+
+    if (!correo) {
+      mensajeError.textContent = "Primero escribe tu correo arriba, y luego toca este enlace.";
+      return;
+    }
+
+    auth.sendPasswordResetEmail(correo)
+      .then(() => {
+        mensajeInfo.textContent = "Te enviamos un correo con instrucciones para restablecer tu contraseña.";
+      })
+      .catch(() => {
+        mensajeError.textContent = "No pudimos enviar el correo. Verifica que esté bien escrito.";
+      });
   }
 
   // ===== DETECTAR CUANDO ALGUIEN INICIA O CIERRA SESIÓN =====
