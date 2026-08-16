@@ -1115,13 +1115,18 @@
       .where('tecnicoId', '==', uid)
       .get();
 
-    if (snapshot.empty) {
-      contenedor.innerHTML = '<p>No tienes servicios asignados por el momento.</p>';
+    // Solo mostramos los servicios que todavía están activos (no los ya terminados,
+    // esos quedan guardados para siempre en el historial del cliente, pero ya no
+    // aparecen en la lista de trabajos pendientes del técnico)
+    const docsActivos = snapshot.docs.filter((doc) => doc.data().estado !== 'terminado');
+
+    if (docsActivos.length === 0) {
+      contenedor.innerHTML = '<p>No tienes servicios pendientes por el momento. ¡Buen trabajo! 🎉</p>';
       return;
     }
 
     contenedor.innerHTML = '';
-    for (const doc of snapshot.docs) {
+    for (const doc of docsActivos) {
       const s = doc.data();
       const estadoClase = 'estado-' + (s.estado || 'pendiente');
       const estadoTexto = nombresEstado[s.estado] || s.estado;
