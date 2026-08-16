@@ -840,11 +840,34 @@
     });
   }
 
-  // Abre la ventana emergente con toda la información del cliente
-  function abrirDetalleCliente(clienteId) {
-    const item = clientesCache.find((c) => c.id === clienteId);
-    if (!item) return;
-    const c = item.data;
+  // Abre la ventana emergente con toda la información del cliente.
+  // Funciona tanto para el administrador (clic en tarjeta de cliente)
+  // como para el técnico (clic en un servicio, para ver a qué cliente pertenece).
+  async function abrirDetalleCliente(clienteId) {
+    let c = null;
+
+    // Primero buscamos en la caché (más rápido, para el panel de admin)
+    const item = clientesCache.find((x) => x.id === clienteId);
+    if (item) {
+      c = item.data;
+    } else {
+      // Si no está en caché (por ejemplo, el técnico), lo buscamos directo en Firestore
+      const doc = await db.collection('Clientes').doc(clienteId).get();
+      if (!doc.exists) return;
+      c = doc.data();
+    }
+
+    // Armamos el link de Google Maps a partir de la dirección escrita
+    const direccionCompleta = [c.direccion, c.barrio, c.ciudad].filter(Boolean).join(', ');
+    const linkMapa = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(direccionCompleta);
+
+    // Los botones de Editar/Eliminar solo tienen sentido para el administrador
+    const esAdmin = !document.getElementById('panel-admin').classList.contains('oculto');
+    const botonesAdmin = esAdmin ? `
+          <div class="fila-botones">
+            <button onclick="editarCliente('${clienteId}')">Editar</button>
+            <button class="boton-eliminar" onclick="eliminarCliente('${clienteId}', '${(c.nombre || '').replace(/'/g, "")}')">Eliminar</button>
+          </div>` : '';
 
     document.getElementById('modal-cliente').innerHTML = `
       <div class="fondo-modal" onclick="if(event.target === this) cerrarModalCliente()">
@@ -860,10 +883,10 @@
           <p><strong>Fecha de ingreso:</strong> ${c.fechaIngreso || '-'}</p>
           <p><strong>Equipos:</strong> ${c.equipos || '-'}</p>
           <p><strong>Observaciones:</strong> ${c.observaciones || '-'}</p>
-          <div class="fila-botones">
-            <button onclick="editarCliente('${clienteId}')">Editar</button>
-            <button class="boton-eliminar" onclick="eliminarCliente('${clienteId}', '${(c.nombre || '').replace(/'/g, "")}')">Eliminar</button>
-          </div>
+          <a href="${linkMapa}" target="_blank" rel="noopener">
+            <button type="button" class="ancho" style="background: var(--verde); margin-top: 6px;">📍 Ver ubicación en Google Maps</button>
+          </a>
+          ${botonesAdmin}
           <button class="boton-cerrar-modal" onclick="cerrarModalCliente()">Cerrar</button>
         </div>
       </div>
@@ -908,11 +931,11 @@
         .join('');
 
       contenedor.innerHTML += `
-        <div class="tarjeta">
+        <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${s.clienteId}')">
           <h3>${s.tipoServicio || 'Servicio'} — ${nombreCliente}</h3>
           <p>Técnico: ${nombreTecnico}</p>
           <p>${s.observaciones || ''}</p>
-          <select class="selector-estado" onchange="cambiarEstadoServicio('${doc.id}', this.value)">
+          <select class="selector-estado" onclick="event.stopPropagation()" onchange="cambiarEstadoServicio('${doc.id}', this.value)">
             ${opciones}
           </select>
         </div>
@@ -935,19 +958,27 @@
     }
 
     contenedor.innerHTML = '';
-    snapshot.forEach((doc) => {
+    for (const doc of snapshot.docs) {
       const s = doc.data();
       const estadoClase = 'estado-' + (s.estado || 'pendiente');
       const estadoTexto = nombresEstado[s.estado] || s.estado;
 
+      // Buscamos el nombre del cliente para mostrarlo en la tarjeta
+      let nombreCliente = '(cliente no encontrado)';
+      if (s.clienteId) {
+        const clienteDoc = await db.collection('Clientes').doc(s.clienteId).get();
+        if (clienteDoc.exists) nombreCliente = clienteDoc.data().nombre;
+      }
+
       contenedor.innerHTML += `
-        <div class="tarjeta">
-          <h3>${s.tipoServicio || 'Servicio'}</h3>
+        <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${s.clienteId}')">
+          <h3>${s.tipoServicio || 'Servicio'} — ${nombreCliente}</h3>
           <p>${s.observaciones || ''}</p>
           <span class="etiqueta-estado ${estadoClase}">${estadoTexto}</span>
+          <p style="margin-top:8px; font-size:12px; color:#888;">Toca para ver los datos y la ubicación del cliente</p>
         </div>
       `;
-    });
+    }
   }
 </script>
 
