@@ -1000,6 +1000,7 @@
         <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${s.clienteId}')">
           <h3>${s.tipoServicio || 'Servicio'} — ${nombreCliente}</h3>
           <p>Técnico: ${nombreTecnico}</p>
+          <p>Fecha: ${s.fecha || '(sin fecha registrada)'}</p>
           <p>${s.observaciones || ''}</p>
           <select class="selector-estado" onclick="event.stopPropagation()" onchange="cambiarEstadoServicio('${doc.id}', this.value)">
             ${opciones}
