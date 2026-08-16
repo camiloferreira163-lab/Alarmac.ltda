@@ -217,6 +217,10 @@
     margin-bottom: 14px;
   }
 
+  #buscador-servicios, #th-mes, #th-buscador {
+    margin-bottom: 14px;
+  }
+
   .boton-eliminar {
     background: #dc2626;
     padding: 6px 12px;
@@ -426,13 +430,22 @@
           <p id="mensaje-form-servicio"></p>
         </div>
 
+        <input type="text" id="buscador-servicios" list="lista-nombres-clientes" placeholder="🔎 Buscar servicios por nombre de cliente..." oninput="filtrarServiciosAdmin()">
+        <datalist id="lista-nombres-clientes"></datalist>
+
         <div id="lista-servicios-admin"></div>
       </div>
 
       <!-- Panel de técnico -->
       <div id="panel-tecnico" class="oculto">
-        <h3 class="titulo-seccion">Mis servicios asignados</h3>
+        <h3 class="titulo-seccion">Mis servicios pendientes</h3>
         <div id="lista-servicios-tecnico"></div>
+
+        <h3 class="titulo-seccion">Historial de clientes atendidos</h3>
+        <label style="font-size:13px; color:#555; display:block; margin-top:8px;">Filtrar por mes</label>
+        <input type="month" id="th-mes" oninput="filtrarHistorialTecnico()">
+        <input type="text" id="th-buscador" placeholder="🔎 Buscar por nombre de cliente..." oninput="filtrarHistorialTecnico()">
+        <div id="lista-historial-tecnico"></div>
       </div>
 
     </div>
@@ -471,6 +484,10 @@
 
   // Guarda el ID del cliente que se está editando (null si es un cliente nuevo)
   let clienteEnEdicion = null;
+
+  // Caché de servicios del panel admin (para el buscador) y del historial del técnico
+  let serviciosAdminCache = [];
+  let historialTecnicoCache = [];
 
   // Nombres "bonitos" para mostrar los estados
   const nombresEstado = {
@@ -553,6 +570,7 @@
           document.getElementById('titulo-panel').textContent = 'Mis Trabajos';
           document.getElementById('panel-tecnico').classList.remove('oculto');
           cargarServiciosTecnico(usuario.uid);
+          cargarHistorialTecnico(usuario.uid);
         }
       } else {
         document.getElementById('texto-usuario').textContent =
@@ -850,6 +868,12 @@
     });
 
     dibujarClientes(clientesCache);
+
+    // Llenamos las sugerencias de autocompletado para el buscador de servicios
+    const datalist = document.getElementById('lista-nombres-clientes');
+    if (datalist) {
+      datalist.innerHTML = clientesCache.map(c => `<option value="${c.data.nombre || ''}">`).join('');
+    }
   }
 
   // Dibuja en pantalla una lista de clientes ya cargados (usada por cargarClientes y por el buscador)
@@ -971,15 +995,15 @@
     const snapshot = await db.collection('servicios').get();
 
     if (snapshot.empty) {
+      serviciosAdminCache = [];
       contenedor.innerHTML = '<p>No hay servicios registrados todavía.</p>';
       return;
     }
 
-    contenedor.innerHTML = '';
+    serviciosAdminCache = [];
     for (const doc of snapshot.docs) {
       const s = doc.data();
 
-      // Buscamos el nombre del cliente y del técnico para mostrarlos, no solo su ID
       let nombreCliente = '(cliente no encontrado)';
       let nombreTecnico = '(técnico no encontrado)';
 
@@ -992,22 +1016,54 @@
         if (tecnicoDoc.exists) nombreTecnico = tecnicoDoc.data().nombre;
       }
 
+      serviciosAdminCache.push({ id: doc.id, data: s, nombreCliente, nombreTecnico });
+    }
+
+    dibujarServiciosAdmin(serviciosAdminCache);
+  }
+
+  // Dibuja la lista de servicios en pantalla (usada por cargarServiciosAdmin y el buscador)
+  function dibujarServiciosAdmin(lista) {
+    const contenedor = document.getElementById('lista-servicios-admin');
+
+    if (lista.length === 0) {
+      contenedor.innerHTML = '<p>No se encontraron servicios para ese cliente.</p>';
+      return;
+    }
+
+    contenedor.innerHTML = '';
+    lista.forEach((item) => {
+      const s = item.data;
       const opciones = ['pendiente', 'en_camino', 'en_progreso', 'terminado']
         .map(op => `<option value="${op}" ${s.estado === op ? 'selected' : ''}>${nombresEstado[op]}</option>`)
         .join('');
 
       contenedor.innerHTML += `
         <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${s.clienteId}')">
-          <h3>${s.tipoServicio || 'Servicio'} — ${nombreCliente}</h3>
-          <p>Técnico: ${nombreTecnico}</p>
+          <h3>${s.tipoServicio || 'Servicio'} — ${item.nombreCliente}</h3>
+          <p>Técnico: ${item.nombreTecnico}</p>
           <p>Fecha: ${s.fecha || '(sin fecha registrada)'}</p>
           <p>${s.observaciones || ''}</p>
-          <select class="selector-estado" onclick="event.stopPropagation()" onchange="cambiarEstadoServicio('${doc.id}', this.value)">
+          ${s.foto ? `<img class="vista-previa-foto" src="${s.foto}">` : ''}
+          <select class="selector-estado" onclick="event.stopPropagation()" onchange="cambiarEstadoServicio('${item.id}', this.value)">
             ${opciones}
           </select>
         </div>
       `;
+    });
+  }
+
+  // El buscador de la sección "Servicios" en el panel admin
+  function filtrarServiciosAdmin() {
+    const texto = document.getElementById('buscador-servicios').value.toLowerCase();
+    if (!texto) {
+      dibujarServiciosAdmin(serviciosAdminCache);
+      return;
     }
+    const filtrados = serviciosAdminCache.filter((item) =>
+      item.nombreCliente.toLowerCase().includes(texto)
+    );
+    dibujarServiciosAdmin(filtrados);
   }
 
   // ===== COMPRIMIR UNA FOTO ANTES DE GUARDARLA (para que ocupe poco espacio) =====
@@ -1101,6 +1157,7 @@
       mensaje.textContent = "";
       cerrarModalInforme();
       cargarServiciosTecnico(auth.currentUser.uid);
+      cargarHistorialTecnico(auth.currentUser.uid);
     } catch (error) {
       mensaje.textContent = "Error al guardar: " + error.message;
       mensaje.style.color = '#dc2626';
@@ -1156,6 +1213,68 @@
         </div>
       `;
     }
+  }
+
+  // ===== HISTORIAL DEL TÉCNICO: todos los clientes que ha atendido, con filtro por mes y por nombre =====
+  async function cargarHistorialTecnico(uid) {
+    const contenedor = document.getElementById('lista-historial-tecnico');
+    contenedor.innerHTML = 'Cargando historial...';
+
+    const snapshot = await db.collection('servicios').where('tecnicoId', '==', uid).get();
+
+    historialTecnicoCache = [];
+    for (const doc of snapshot.docs) {
+      const s = doc.data();
+      let nombreCliente = '(cliente no encontrado)';
+      if (s.clienteId) {
+        const clienteDoc = await db.collection('Clientes').doc(s.clienteId).get();
+        if (clienteDoc.exists) nombreCliente = clienteDoc.data().nombre;
+      }
+      historialTecnicoCache.push({ id: doc.id, data: s, nombreCliente });
+    }
+
+    // Ordenamos del más reciente al más antiguo
+    historialTecnicoCache.sort((a, b) => (b.data.fecha || '').localeCompare(a.data.fecha || ''));
+
+    dibujarHistorialTecnico(historialTecnicoCache);
+  }
+
+  function dibujarHistorialTecnico(lista) {
+    const contenedor = document.getElementById('lista-historial-tecnico');
+
+    if (lista.length === 0) {
+      contenedor.innerHTML = '<p>No se encontraron visitas para ese filtro.</p>';
+      return;
+    }
+
+    contenedor.innerHTML = '';
+    lista.forEach((item) => {
+      const s = item.data;
+      const estadoClase = 'estado-' + (s.estado || 'pendiente');
+      const estadoTexto = nombresEstado[s.estado] || s.estado;
+
+      contenedor.innerHTML += `
+        <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${s.clienteId}')">
+          <h3>${item.nombreCliente}</h3>
+          <p>${s.tipoServicio || ''} — ${s.fecha || '(sin fecha)'}</p>
+          <span class="etiqueta-estado ${estadoClase}">${estadoTexto}</span>
+        </div>
+      `;
+    });
+  }
+
+  // Aplica el filtro de mes y/o texto sobre el historial del técnico
+  function filtrarHistorialTecnico() {
+    const mes = document.getElementById('th-mes').value; // formato AAAA-MM
+    const texto = document.getElementById('th-buscador').value.toLowerCase();
+
+    const filtrados = historialTecnicoCache.filter((item) => {
+      const coincideMes = !mes || (item.data.fecha || '').startsWith(mes);
+      const coincideTexto = !texto || item.nombreCliente.toLowerCase().includes(texto);
+      return coincideMes && coincideTexto;
+    });
+
+    dibujarHistorialTecnico(filtrados);
   }
 </script>
 
