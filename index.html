@@ -229,6 +229,57 @@
     display: flex;
     gap: 8px;
   }
+
+  .tarjeta-clicable {
+    cursor: pointer;
+  }
+
+  .tarjeta-clicable:active {
+    background: var(--gris-claro);
+  }
+
+  /* ===== VENTANA EMERGENTE (MODAL) ===== */
+  .fondo-modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .caja-modal {
+    background: var(--blanco);
+    border-radius: 16px 16px 0 0;
+    padding: 20px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  .caja-modal h2 {
+    color: var(--azul-rey);
+    margin-top: 0;
+    margin-bottom: 4px;
+  }
+
+  .caja-modal p {
+    font-size: 15px;
+    color: var(--gris-texto);
+    margin: 6px 0;
+  }
+
+  .caja-modal p strong {
+    color: #222;
+  }
+
+  .boton-cerrar-modal {
+    background: #9ca3af;
+    width: 100%;
+    margin-top: 16px;
+  }
 </style>
 </head>
 <body>
@@ -271,6 +322,7 @@
         <button class="boton-nuevo" onclick="mostrarFormularioCliente()">+ Nuevo cliente</button>
 
         <div class="formulario oculto" id="form-cliente">
+          <h3 id="titulo-form-cliente" style="margin-top:0; color: var(--azul-rey);">Nuevo cliente</h3>
           <label>Nombre del cliente / negocio</label>
           <input type="text" id="fc-nombre">
           <label>Empresa</label>
@@ -358,6 +410,9 @@
     </div>
   </div>
 
+  <!-- Aquí se dibuja la ventana emergente con el detalle del cliente -->
+  <div id="modal-cliente"></div>
+
 <script>
   // ===== CONFIGURACIÓN DE FIREBASE =====
   const firebaseConfig = {
@@ -382,6 +437,9 @@
   // Guardamos aquí la lista de clientes ya cargada, para poder filtrarla sin
   // volver a preguntarle a Firestore cada vez que alguien escribe en el buscador
   let clientesCache = [];
+
+  // Guarda el ID del cliente que se está editando (null si es un cliente nuevo)
+  let clienteEnEdicion = null;
 
   // Nombres "bonitos" para mostrar los estados
   const nombresEstado = {
@@ -478,12 +536,40 @@
     }
   });
 
-  // ===== FORMULARIO: NUEVO CLIENTE =====
+  // ===== FORMULARIO: NUEVO CLIENTE (o EDITAR, si se pasa un id) =====
   function mostrarFormularioCliente() {
+    clienteEnEdicion = null;
+    document.getElementById('titulo-form-cliente').textContent = 'Nuevo cliente';
     document.getElementById('form-cliente').classList.remove('oculto');
   }
 
+  function editarCliente(clienteId) {
+    const item = clientesCache.find((c) => c.id === clienteId);
+    if (!item) return;
+    const c = item.data;
+
+    clienteEnEdicion = clienteId;
+    cerrarModalCliente();
+
+    document.getElementById('titulo-form-cliente').textContent = 'Editar cliente';
+    document.getElementById('fc-nombre').value = c.nombre || '';
+    document.getElementById('fc-empresa').value = c.empresa || '';
+    document.getElementById('fc-direccion').value = c.direccion || '';
+    document.getElementById('fc-barrio').value = c.barrio || '';
+    document.getElementById('fc-ciudad').value = c.ciudad || '';
+    document.getElementById('fc-telefono').value = c.telefono || '';
+    document.getElementById('fc-celular').value = c.celular || '';
+    document.getElementById('fc-correo').value = c.correo || '';
+    document.getElementById('fc-fecha').value = c.fechaIngreso || '';
+    document.getElementById('fc-equipos').value = c.equipos || '';
+    document.getElementById('fc-observaciones').value = c.observaciones || '';
+
+    document.getElementById('form-cliente').classList.remove('oculto');
+    document.getElementById('form-cliente').scrollIntoView({ behavior: 'smooth' });
+  }
+
   function ocultarFormularioCliente() {
+    clienteEnEdicion = null;
     document.getElementById('form-cliente').classList.add('oculto');
   }
 
@@ -500,20 +586,28 @@
     mensaje.textContent = "Guardando...";
     mensaje.style.color = '#555';
 
+    const datosCliente = {
+      nombre: nombre,
+      empresa: document.getElementById('fc-empresa').value.trim(),
+      direccion: document.getElementById('fc-direccion').value.trim(),
+      barrio: document.getElementById('fc-barrio').value.trim(),
+      ciudad: document.getElementById('fc-ciudad').value.trim(),
+      telefono: document.getElementById('fc-telefono').value.trim(),
+      celular: document.getElementById('fc-celular').value.trim(),
+      correo: document.getElementById('fc-correo').value.trim(),
+      fechaIngreso: document.getElementById('fc-fecha').value,
+      equipos: document.getElementById('fc-equipos').value.trim(),
+      observaciones: document.getElementById('fc-observaciones').value.trim()
+    };
+
     try {
-      await db.collection('Clientes').add({
-        nombre: nombre,
-        empresa: document.getElementById('fc-empresa').value.trim(),
-        direccion: document.getElementById('fc-direccion').value.trim(),
-        barrio: document.getElementById('fc-barrio').value.trim(),
-        ciudad: document.getElementById('fc-ciudad').value.trim(),
-        telefono: document.getElementById('fc-telefono').value.trim(),
-        celular: document.getElementById('fc-celular').value.trim(),
-        correo: document.getElementById('fc-correo').value.trim(),
-        fechaIngreso: document.getElementById('fc-fecha').value,
-        equipos: document.getElementById('fc-equipos').value.trim(),
-        observaciones: document.getElementById('fc-observaciones').value.trim()
-      });
+      if (clienteEnEdicion) {
+        // Estamos editando un cliente existente
+        await db.collection('Clientes').doc(clienteEnEdicion).update(datosCliente);
+      } else {
+        // Estamos creando un cliente nuevo
+        await db.collection('Clientes').add(datosCliente);
+      }
 
       // Limpiar el formulario
       ['fc-nombre','fc-empresa','fc-direccion','fc-barrio','fc-ciudad','fc-telefono','fc-celular','fc-correo','fc-fecha','fc-equipos','fc-observaciones']
@@ -521,7 +615,7 @@
 
       mensaje.textContent = "";
       ocultarFormularioCliente();
-      cargarClientes(); // refrescamos la lista para que aparezca el nuevo
+      cargarClientes(); // refrescamos la lista para que aparezca el cambio
     } catch (error) {
       mensaje.textContent = "Error al guardar: " + error.message;
       mensaje.style.color = '#dc2626';
@@ -737,19 +831,47 @@
     lista.forEach((item) => {
       const c = item.data;
       contenedor.innerHTML += `
-        <div class="tarjeta">
+        <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${item.id}')">
           <h3>${c.nombre || '(sin nombre)'}</h3>
           <p>${c.empresa || ''}</p>
-          <p>${c.direccion || ''}, ${c.barrio || ''}, ${c.ciudad || ''}</p>
-          <p>Tel: ${c.telefono || '-'} | Cel: ${c.celular || '-'}</p>
-          <p>${c.correo || ''}</p>
-          <p>Ingreso: ${c.fechaIngreso || '-'}</p>
-          <p>Equipos: ${c.equipos || '-'}</p>
-          <p><em>${c.observaciones || ''}</em></p>
-          <button class="boton-eliminar" onclick="eliminarCliente('${item.id}', '${(c.nombre || '').replace(/'/g, "")}')">Eliminar</button>
+          <p>${c.barrio || ''}, ${c.ciudad || ''}</p>
         </div>
       `;
     });
+  }
+
+  // Abre la ventana emergente con toda la información del cliente
+  function abrirDetalleCliente(clienteId) {
+    const item = clientesCache.find((c) => c.id === clienteId);
+    if (!item) return;
+    const c = item.data;
+
+    document.getElementById('modal-cliente').innerHTML = `
+      <div class="fondo-modal" onclick="if(event.target === this) cerrarModalCliente()">
+        <div class="caja-modal">
+          <h2>${c.nombre || '(sin nombre)'}</h2>
+          <p><strong>Empresa:</strong> ${c.empresa || '-'}</p>
+          <p><strong>Dirección:</strong> ${c.direccion || '-'}</p>
+          <p><strong>Barrio:</strong> ${c.barrio || '-'}</p>
+          <p><strong>Ciudad:</strong> ${c.ciudad || '-'}</p>
+          <p><strong>Teléfono:</strong> ${c.telefono || '-'}</p>
+          <p><strong>Celular:</strong> ${c.celular || '-'}</p>
+          <p><strong>Correo:</strong> ${c.correo || '-'}</p>
+          <p><strong>Fecha de ingreso:</strong> ${c.fechaIngreso || '-'}</p>
+          <p><strong>Equipos:</strong> ${c.equipos || '-'}</p>
+          <p><strong>Observaciones:</strong> ${c.observaciones || '-'}</p>
+          <div class="fila-botones">
+            <button onclick="editarCliente('${clienteId}')">Editar</button>
+            <button class="boton-eliminar" onclick="eliminarCliente('${clienteId}', '${(c.nombre || '').replace(/'/g, "")}')">Eliminar</button>
+          </div>
+          <button class="boton-cerrar-modal" onclick="cerrarModalCliente()">Cerrar</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function cerrarModalCliente() {
+    document.getElementById('modal-cliente').innerHTML = '';
   }
 
   // ===== CARGAR SERVICIOS (vista administrador, todos) =====
