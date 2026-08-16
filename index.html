@@ -212,6 +212,23 @@
   }
 
   #mensaje-form { font-size: 13px; margin-top: 8px; }
+
+  #buscador-clientes {
+    margin-bottom: 14px;
+  }
+
+  .boton-eliminar {
+    background: #dc2626;
+    padding: 6px 12px;
+    font-size: 12px;
+    margin-top: 8px;
+    margin-right: 8px;
+  }
+
+  .tarjeta-botones {
+    display: flex;
+    gap: 8px;
+  }
 </style>
 </head>
 <body>
@@ -270,6 +287,10 @@
           <input type="text" id="fc-celular">
           <label>Correo</label>
           <input type="email" id="fc-correo">
+          <label>Fecha de ingreso</label>
+          <input type="date" id="fc-fecha">
+          <label>Equipos que utiliza (ej: 4 cámaras, 1 panel de alarma)</label>
+          <input type="text" id="fc-equipos">
           <label>Observaciones</label>
           <input type="text" id="fc-observaciones">
           <div class="fila-botones">
@@ -279,7 +300,28 @@
           <p id="mensaje-form"></p>
         </div>
 
+        <input type="text" id="buscador-clientes" placeholder="🔎 Buscar cliente por nombre, empresa o barrio..." oninput="filtrarClientes()">
+
         <div id="lista-clientes"></div>
+
+        <h3 class="titulo-seccion">Técnicos</h3>
+        <button class="boton-nuevo" onclick="mostrarFormularioTecnico()">+ Nuevo técnico</button>
+
+        <div class="formulario oculto" id="form-tecnico">
+          <label>Nombre completo</label>
+          <input type="text" id="ft-nombre">
+          <label>Correo electrónico (con el que va a iniciar sesión)</label>
+          <input type="email" id="ft-correo">
+          <label>Contraseña temporal (el técnico puede cambiarla después)</label>
+          <input type="text" id="ft-clave">
+          <div class="fila-botones">
+            <button class="boton-cancelar" onclick="ocultarFormularioTecnico()">Cancelar</button>
+            <button onclick="guardarTecnico()">Crear técnico</button>
+          </div>
+          <p id="mensaje-form-tecnico"></p>
+        </div>
+
+        <div id="lista-tecnicos"></div>
 
         <h3 class="titulo-seccion">Servicios</h3>
         <button class="boton-nuevo" onclick="mostrarFormularioServicio()">+ Nuevo servicio</button>
@@ -330,6 +372,16 @@
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.firestore();
+
+  // Una segunda "conexión" a Firebase, usada SOLO para crear técnicos.
+  // Esto evita que, al crear un usuario nuevo, se cierre tu sesión de administrador
+  // (Firebase por defecto inicia sesión automáticamente con el usuario recién creado).
+  const appSecundaria = firebase.initializeApp(firebaseConfig, "Secundaria");
+  const authSecundaria = appSecundaria.auth();
+
+  // Guardamos aquí la lista de clientes ya cargada, para poder filtrarla sin
+  // volver a preguntarle a Firestore cada vez que alguien escribe en el buscador
+  let clientesCache = [];
 
   // Nombres "bonitos" para mostrar los estados
   const nombresEstado = {
@@ -406,6 +458,7 @@
           document.getElementById('titulo-panel').textContent = 'Panel de Administrador';
           document.getElementById('panel-admin').classList.remove('oculto');
           cargarClientes();
+          cargarTecnicos();
           cargarServiciosAdmin();
         } else {
           document.getElementById('titulo-panel').textContent = 'Mis Trabajos';
@@ -457,11 +510,13 @@
         telefono: document.getElementById('fc-telefono').value.trim(),
         celular: document.getElementById('fc-celular').value.trim(),
         correo: document.getElementById('fc-correo').value.trim(),
+        fechaIngreso: document.getElementById('fc-fecha').value,
+        equipos: document.getElementById('fc-equipos').value.trim(),
         observaciones: document.getElementById('fc-observaciones').value.trim()
       });
 
       // Limpiar el formulario
-      ['fc-nombre','fc-empresa','fc-direccion','fc-barrio','fc-ciudad','fc-telefono','fc-celular','fc-correo','fc-observaciones']
+      ['fc-nombre','fc-empresa','fc-direccion','fc-barrio','fc-ciudad','fc-telefono','fc-celular','fc-correo','fc-fecha','fc-equipos','fc-observaciones']
         .forEach(id => document.getElementById(id).value = '');
 
       mensaje.textContent = "";
@@ -547,6 +602,112 @@
     cargarServiciosAdmin();
   }
 
+  // ===== FORMULARIO: NUEVO TÉCNICO =====
+  function mostrarFormularioTecnico() {
+    document.getElementById('form-tecnico').classList.remove('oculto');
+  }
+
+  function ocultarFormularioTecnico() {
+    document.getElementById('form-tecnico').classList.add('oculto');
+  }
+
+  async function guardarTecnico() {
+    const mensaje = document.getElementById('mensaje-form-tecnico');
+    const nombre = document.getElementById('ft-nombre').value.trim();
+    const correo = document.getElementById('ft-correo').value.trim();
+    const clave = document.getElementById('ft-clave').value;
+
+    if (!nombre || !correo || !clave) {
+      mensaje.textContent = "Completa nombre, correo y contraseña.";
+      mensaje.style.color = '#dc2626';
+      return;
+    }
+    if (clave.length < 6) {
+      mensaje.textContent = "La contraseña debe tener al menos 6 caracteres.";
+      mensaje.style.color = '#dc2626';
+      return;
+    }
+
+    mensaje.textContent = "Creando técnico...";
+    mensaje.style.color = '#555';
+
+    try {
+      // Creamos el acceso de login usando la conexión "secundaria",
+      // así no se cierra tu sesión de administrador
+      const resultado = await authSecundaria.createUserWithEmailAndPassword(correo, clave);
+      const nuevoUid = resultado.user.uid;
+
+      // Guardamos su ficha en Firestore (con el mismo UID que su login)
+      await db.collection('usuarios').doc(nuevoUid).set({
+        nombre: nombre,
+        correo: correo,
+        rol: 'tecnico',
+        activo: true
+      });
+
+      // Cerramos la sesión de la conexión secundaria (no afecta tu sesión principal)
+      await authSecundaria.signOut();
+
+      document.getElementById('ft-nombre').value = '';
+      document.getElementById('ft-correo').value = '';
+      document.getElementById('ft-clave').value = '';
+      mensaje.textContent = "";
+      ocultarFormularioTecnico();
+      cargarTecnicos();
+    } catch (error) {
+      let texto = "Error al crear el técnico.";
+      if (error.code === 'auth/email-already-in-use') texto = "Ese correo ya está registrado.";
+      if (error.code === 'auth/invalid-email') texto = "El correo no es válido.";
+      mensaje.textContent = texto;
+      mensaje.style.color = '#dc2626';
+    }
+  }
+
+  // ===== CARGAR TÉCNICOS =====
+  async function cargarTecnicos() {
+    const contenedor = document.getElementById('lista-tecnicos');
+    contenedor.innerHTML = 'Cargando técnicos...';
+
+    const snapshot = await db.collection('usuarios').where('rol', '==', 'tecnico').get();
+
+    if (snapshot.empty) {
+      contenedor.innerHTML = '<p>No hay técnicos registrados todavía.</p>';
+      return;
+    }
+
+    contenedor.innerHTML = '';
+    snapshot.forEach((doc) => {
+      const t = doc.data();
+      contenedor.innerHTML += `
+        <div class="tarjeta">
+          <h3>${t.nombre}</h3>
+          <p>${t.correo}</p>
+        </div>
+      `;
+    });
+  }
+
+  // ===== ELIMINAR CLIENTE =====
+  async function eliminarCliente(clienteId, nombreCliente) {
+    const confirmar = confirm('¿Seguro que quieres eliminar a "' + nombreCliente + '"? Esta acción no se puede deshacer.');
+    if (!confirmar) return;
+
+    await db.collection('Clientes').doc(clienteId).delete();
+    cargarClientes();
+  }
+
+  // ===== BUSCADOR DE CLIENTES =====
+  function filtrarClientes() {
+    const texto = document.getElementById('buscador-clientes').value.toLowerCase();
+    const filtrados = clientesCache.filter((c) => {
+      const datos = c.data;
+      return (datos.nombre || '').toLowerCase().includes(texto) ||
+             (datos.empresa || '').toLowerCase().includes(texto) ||
+             (datos.barrio || '').toLowerCase().includes(texto);
+    });
+    dibujarClientes(filtrados);
+  }
+
   // ===== CARGAR CLIENTES (solo administrador) =====
   async function cargarClientes() {
     const contenedor = document.getElementById('lista-clientes');
@@ -554,14 +715,27 @@
 
     const snapshot = await db.collection('Clientes').get();
 
-    if (snapshot.empty) {
-      contenedor.innerHTML = '<p>No hay clientes registrados todavía.</p>';
+    // Guardamos todo en caché para que el buscador funcione sin re-consultar Firestore
+    clientesCache = [];
+    snapshot.forEach((doc) => {
+      clientesCache.push({ id: doc.id, data: doc.data() });
+    });
+
+    dibujarClientes(clientesCache);
+  }
+
+  // Dibuja en pantalla una lista de clientes ya cargados (usada por cargarClientes y por el buscador)
+  function dibujarClientes(lista) {
+    const contenedor = document.getElementById('lista-clientes');
+
+    if (lista.length === 0) {
+      contenedor.innerHTML = '<p>No se encontraron clientes.</p>';
       return;
     }
 
     contenedor.innerHTML = '';
-    snapshot.forEach((doc) => {
-      const c = doc.data();
+    lista.forEach((item) => {
+      const c = item.data;
       contenedor.innerHTML += `
         <div class="tarjeta">
           <h3>${c.nombre || '(sin nombre)'}</h3>
@@ -569,7 +743,10 @@
           <p>${c.direccion || ''}, ${c.barrio || ''}, ${c.ciudad || ''}</p>
           <p>Tel: ${c.telefono || '-'} | Cel: ${c.celular || '-'}</p>
           <p>${c.correo || ''}</p>
+          <p>Ingreso: ${c.fechaIngreso || '-'}</p>
+          <p>Equipos: ${c.equipos || '-'}</p>
           <p><em>${c.observaciones || ''}</em></p>
+          <button class="boton-eliminar" onclick="eliminarCliente('${item.id}', '${(c.nombre || '').replace(/'/g, "")}')">Eliminar</button>
         </div>
       `;
     });
