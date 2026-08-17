@@ -328,6 +328,40 @@
     border-radius: 20px;
     margin-bottom: 6px;
   }
+
+  .tarjeta-abierta {
+    border-left: 5px solid var(--naranja);
+  }
+
+  .tarjeta-terminada {
+    border-left: 5px solid var(--verde);
+    opacity: 0.85;
+  }
+
+  .fila-filtros {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 10px;
+  }
+
+  .filtro-chip {
+    background: var(--blanco);
+    color: var(--azul-rey);
+    border: 1px solid var(--azul-rey);
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .filtro-activo {
+    background: var(--azul-rey);
+    color: var(--blanco);
+  }
 </style>
 </head>
 <body>
@@ -450,6 +484,18 @@
 
         <input type="text" id="buscador-servicios" list="lista-nombres-clientes" placeholder="🔎 Buscar servicios por nombre de cliente..." oninput="filtrarServiciosAdmin()">
         <datalist id="lista-nombres-clientes"></datalist>
+
+        <div class="fila-filtros">
+          <button type="button" id="filtro-todos" class="filtro-chip filtro-activo" onclick="cambiarFiltroEstadoAdmin('todos')">Todos</button>
+          <button type="button" id="filtro-pendiente" class="filtro-chip" onclick="cambiarFiltroEstadoAdmin('pendiente')">Pendientes</button>
+          <button type="button" id="filtro-en_progreso" class="filtro-chip" onclick="cambiarFiltroEstadoAdmin('en_progreso')">En progreso</button>
+          <button type="button" id="filtro-terminado" class="filtro-chip" onclick="cambiarFiltroEstadoAdmin('terminado')">Terminados</button>
+        </div>
+
+        <label style="font-size:13px; display:flex; align-items:center; gap:6px; margin-bottom:14px;">
+          <input type="checkbox" id="filtro-semana" checked onchange="filtrarServiciosAdmin()">
+          Mostrar solo los de esta semana (los pendientes de otras fechas se pueden ver quitando esta casilla)
+        </label>
 
         <div id="lista-servicios-admin"></div>
       </div>
@@ -1075,7 +1121,7 @@
       serviciosAdminCache.push({ id: doc.id, data: s, nombreCliente, nombreTecnico });
     }
 
-    dibujarServiciosAdmin(serviciosAdminCache);
+    filtrarServiciosAdmin();
   }
 
   // Dibuja la lista de servicios en pantalla (usada por cargarServiciosAdmin y el buscador)
@@ -1083,7 +1129,7 @@
     const contenedor = document.getElementById('lista-servicios-admin');
 
     if (lista.length === 0) {
-      contenedor.innerHTML = '<p>No se encontraron servicios para ese cliente.</p>';
+      contenedor.innerHTML = '<p>No se encontraron servicios con los filtros que tienes activos. Prueba quitando alguno.</p>';
       return;
     }
 
@@ -1095,7 +1141,7 @@
         .join('');
 
       contenedor.innerHTML += `
-        <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : ''}" onclick="abrirDetalleCliente('${s.clienteId}')">
+        <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : (s.estado === 'terminado' ? 'tarjeta-terminada' : 'tarjeta-abierta')}" onclick="abrirDetalleCliente('${s.clienteId}')">
           ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO — creado por el técnico</span>' : ''}
           <h3>${s.tipoServicio || 'Servicio'} — ${item.nombreCliente}</h3>
           <p>Técnico: ${item.nombreTecnico}</p>
@@ -1110,16 +1156,51 @@
     });
   }
 
-  // El buscador de la sección "Servicios" en el panel admin
+  // ===== FILTROS COMBINADOS DE LA SECCIÓN "SERVICIOS" (texto + estado + semana) =====
+  let filtroEstadoAdmin = 'todos';
+
+  function cambiarFiltroEstadoAdmin(estado) {
+    filtroEstadoAdmin = estado;
+
+    // Actualizamos visualmente cuál botón está activo
+    ['todos', 'pendiente', 'en_progreso', 'terminado'].forEach((e) => {
+      document.getElementById('filtro-' + e).classList.remove('filtro-activo');
+    });
+    document.getElementById('filtro-' + estado).classList.add('filtro-activo');
+
+    filtrarServiciosAdmin();
+  }
+
+  // Devuelve la fecha (AAAA-MM-DD) de hace 7 días, para el filtro "esta semana"
+  function fechaHaceSieteDias() {
+    const hace7 = new Date();
+    hace7.setDate(hace7.getDate() - 7);
+    return hace7.toISOString().slice(0, 10);
+  }
+
+  // El buscador + filtros de la sección "Servicios" en el panel admin (se combinan todos)
   function filtrarServiciosAdmin() {
     const texto = document.getElementById('buscador-servicios').value.toLowerCase();
-    if (!texto) {
-      dibujarServiciosAdmin(serviciosAdminCache);
-      return;
-    }
-    const filtrados = serviciosAdminCache.filter((item) =>
-      item.nombreCliente.toLowerCase().includes(texto)
-    );
+    const soloEstaSemana = document.getElementById('filtro-semana').checked;
+    const limiteSemana = fechaHaceSieteDias();
+
+    const filtrados = serviciosAdminCache.filter((item) => {
+      const s = item.data;
+
+      const coincideTexto = !texto || item.nombreCliente.toLowerCase().includes(texto);
+
+      const coincideEstado = filtroEstadoAdmin === 'todos' || s.estado === filtroEstadoAdmin;
+
+      // El filtro de "esta semana" no aplica a los que ya están terminados,
+      // así siempre puedes ver todo lo pendiente sin importar su fecha,
+      // pero el listado no se llena de servicios cerrados de hace meses
+      const coincideSemana = !soloEstaSemana ||
+        s.estado !== 'terminado' ||
+        (s.fecha || '') >= limiteSemana;
+
+      return coincideTexto && coincideEstado && coincideSemana;
+    });
+
     dibujarServiciosAdmin(filtrados);
   }
 
