@@ -312,6 +312,22 @@
 
   .item-historial p { margin: 2px 0; font-size: 13px; }
   .item-historial .fecha-historial { font-weight: bold; color: var(--azul-rey); }
+
+  .tarjeta-prioritaria {
+    border: 2px solid #dc2626;
+    background: #fef2f2;
+  }
+
+  .etiqueta-prioritario {
+    display: inline-block;
+    background: #dc2626;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 20px;
+    margin-bottom: 6px;
+  }
 </style>
 </head>
 <body>
@@ -355,6 +371,8 @@
 
         <div class="formulario oculto" id="form-cliente">
           <h3 id="titulo-form-cliente" style="margin-top:0; color: var(--azul-rey);">Nuevo cliente</h3>
+          <label>Código único del cliente (ej: C-001, JUAN-01)</label>
+          <input type="text" id="fc-codigo">
           <label>Nombre del cliente / negocio</label>
           <input type="text" id="fc-nombre">
           <label>Empresa</label>
@@ -384,7 +402,7 @@
           <p id="mensaje-form"></p>
         </div>
 
-        <input type="text" id="buscador-clientes" placeholder="🔎 Buscar cliente por nombre, empresa o barrio..." oninput="filtrarClientes()">
+        <input type="text" id="buscador-clientes" placeholder="🔎 Escribe el código, nombre o iniciales para buscar..." oninput="filtrarClientes()">
 
         <div id="lista-clientes"></div>
 
@@ -438,6 +456,28 @@
 
       <!-- Panel de técnico -->
       <div id="panel-tecnico" class="oculto">
+        <button class="boton-nuevo" style="background:#dc2626;" onclick="mostrarFormularioPrioritario()">🚨 Crear servicio prioritario</button>
+
+        <div class="formulario oculto" id="form-prioritario">
+          <h3 style="margin-top:0; color:#dc2626;">Nuevo servicio prioritario</h3>
+          <p style="font-size:13px; color:#555;">Usa esto solo para casos urgentes que surgen en el momento. Va a quedar marcado como creado por ti.</p>
+          <label>Cliente</label>
+          <select id="fp-cliente"></select>
+          <label>Tipo de servicio</label>
+          <select id="fp-tipo">
+            <option value="instalación">Instalación</option>
+            <option value="mantenimiento">Mantenimiento</option>
+            <option value="reparación">Reparación</option>
+          </select>
+          <label>Observaciones (explica la urgencia)</label>
+          <input type="text" id="fp-observaciones">
+          <div class="fila-botones">
+            <button class="boton-cancelar" onclick="ocultarFormularioPrioritario()">Cancelar</button>
+            <button style="background:#dc2626;" onclick="guardarServicioPrioritario()">Crear servicio prioritario</button>
+          </div>
+          <p id="mensaje-form-prioritario"></p>
+        </div>
+
         <h3 class="titulo-seccion">Mis servicios pendientes</h3>
         <div id="lista-servicios-tecnico"></div>
 
@@ -601,6 +641,7 @@
     cerrarModalCliente();
 
     document.getElementById('titulo-form-cliente').textContent = 'Editar cliente';
+    document.getElementById('fc-codigo').value = c.codigo || '';
     document.getElementById('fc-nombre').value = c.nombre || '';
     document.getElementById('fc-empresa').value = c.empresa || '';
     document.getElementById('fc-direccion').value = c.direccion || '';
@@ -636,6 +677,7 @@
     mensaje.style.color = '#555';
 
     const datosCliente = {
+      codigo: document.getElementById('fc-codigo').value.trim(),
       nombre: nombre,
       empresa: document.getElementById('fc-empresa').value.trim(),
       direccion: document.getElementById('fc-direccion').value.trim(),
@@ -659,7 +701,7 @@
       }
 
       // Limpiar el formulario
-      ['fc-nombre','fc-empresa','fc-direccion','fc-barrio','fc-ciudad','fc-telefono','fc-celular','fc-correo','fc-fecha','fc-equipos','fc-observaciones']
+      ['fc-codigo','fc-nombre','fc-empresa','fc-direccion','fc-barrio','fc-ciudad','fc-telefono','fc-celular','fc-correo','fc-fecha','fc-equipos','fc-observaciones']
         .forEach(id => document.getElementById(id).value = '');
 
       mensaje.textContent = "";
@@ -844,10 +886,18 @@
 
   // ===== BUSCADOR DE CLIENTES =====
   function filtrarClientes() {
-    const texto = document.getElementById('buscador-clientes').value.toLowerCase();
+    const texto = document.getElementById('buscador-clientes').value.toLowerCase().trim();
+
+    if (texto.length < 2) {
+      // Con menos de 2 letras no mostramos nada (evita listar cientos de clientes de una vez)
+      dibujarClientes([]);
+      return;
+    }
+
     const filtrados = clientesCache.filter((c) => {
       const datos = c.data;
-      return (datos.nombre || '').toLowerCase().includes(texto) ||
+      return (datos.codigo || '').toLowerCase().includes(texto) ||
+             (datos.nombre || '').toLowerCase().includes(texto) ||
              (datos.empresa || '').toLowerCase().includes(texto) ||
              (datos.barrio || '').toLowerCase().includes(texto);
     });
@@ -867,21 +917,26 @@
       clientesCache.push({ id: doc.id, data: doc.data() });
     });
 
-    dibujarClientes(clientesCache);
+    dibujarClientes([]);
 
     // Llenamos las sugerencias de autocompletado para el buscador de servicios
     const datalist = document.getElementById('lista-nombres-clientes');
     if (datalist) {
-      datalist.innerHTML = clientesCache.map(c => `<option value="${c.data.nombre || ''}">`).join('');
+      datalist.innerHTML = clientesCache.map(c => `<option value="${c.data.codigo ? c.data.codigo + ' - ' : ''}${c.data.nombre || ''}">`).join('');
     }
   }
 
   // Dibuja en pantalla una lista de clientes ya cargados (usada por cargarClientes y por el buscador)
   function dibujarClientes(lista) {
     const contenedor = document.getElementById('lista-clientes');
+    const textoBuscador = document.getElementById('buscador-clientes').value.trim();
 
     if (lista.length === 0) {
-      contenedor.innerHTML = '<p>No se encontraron clientes.</p>';
+      if (textoBuscador.length < 2) {
+        contenedor.innerHTML = '<p>Escribe al menos 2 letras (nombre, código o barrio) para buscar entre tus clientes.</p>';
+      } else {
+        contenedor.innerHTML = '<p>No se encontraron clientes con ese criterio.</p>';
+      }
       return;
     }
 
@@ -890,7 +945,7 @@
       const c = item.data;
       contenedor.innerHTML += `
         <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${item.id}')">
-          <h3>${c.nombre || '(sin nombre)'}</h3>
+          <h3>${c.codigo ? '[' + c.codigo + '] ' : ''}${c.nombre || '(sin nombre)'}</h3>
           <p>${c.empresa || ''}</p>
           <p>${c.barrio || ''}, ${c.ciudad || ''}</p>
         </div>
@@ -933,7 +988,8 @@
     let htmlHistorial = '<p>Este cliente no tiene servicios registrados todavía.</p>';
     if (visitas.length > 0) {
       htmlHistorial = visitas.map((v) => `
-        <div class="item-historial">
+        <div class="item-historial" style="${v.prioritario ? 'border-left-color:#dc2626;' : ''}">
+          ${v.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO — creado por el técnico</span>' : ''}
           <p class="fecha-historial">${v.fecha || 'Sin fecha'} — ${nombresEstado[v.estado] || v.estado}</p>
           <p>Servicio: ${v.tipoServicio || '-'}</p>
           <p>Técnico: ${v.nombreTecnico}</p>
@@ -958,7 +1014,7 @@
     document.getElementById('modal-cliente').innerHTML = `
       <div class="fondo-modal" onclick="if(event.target === this) cerrarModalCliente()">
         <div class="caja-modal">
-          <h2>${c.nombre || '(sin nombre)'}</h2>
+          <h2>${c.codigo ? '[' + c.codigo + '] ' : ''}${c.nombre || '(sin nombre)'}</h2>
           <p><strong>Empresa:</strong> ${c.empresa || '-'}</p>
           <p><strong>Dirección:</strong> ${c.direccion || '-'}</p>
           <p><strong>Barrio:</strong> ${c.barrio || '-'}</p>
@@ -1039,7 +1095,8 @@
         .join('');
 
       contenedor.innerHTML += `
-        <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${s.clienteId}')">
+        <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : ''}" onclick="abrirDetalleCliente('${s.clienteId}')">
+          ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO — creado por el técnico</span>' : ''}
           <h3>${s.tipoServicio || 'Servicio'} — ${item.nombreCliente}</h3>
           <p>Técnico: ${item.nombreTecnico}</p>
           <p>Fecha: ${s.fecha || '(sin fecha registrada)'}</p>
@@ -1164,6 +1221,65 @@
     }
   }
 
+  // ===== FORMULARIO: SERVICIO PRIORITARIO (creado por el técnico) =====
+  async function mostrarFormularioPrioritario() {
+    document.getElementById('form-prioritario').classList.remove('oculto');
+
+    const select = document.getElementById('fp-cliente');
+    select.innerHTML = '<option value="">Cargando clientes...</option>';
+    const snap = await db.collection('Clientes').get();
+    select.innerHTML = '';
+    snap.forEach((doc) => {
+      const c = doc.data();
+      select.innerHTML += `<option value="${doc.id}">${c.codigo ? '[' + c.codigo + '] ' : ''}${c.nombre}</option>`;
+    });
+    if (snap.empty) {
+      select.innerHTML = '<option value="">No hay clientes creados todavía</option>';
+    }
+  }
+
+  function ocultarFormularioPrioritario() {
+    document.getElementById('form-prioritario').classList.add('oculto');
+  }
+
+  async function guardarServicioPrioritario() {
+    const mensaje = document.getElementById('mensaje-form-prioritario');
+    const clienteId = document.getElementById('fp-cliente').value;
+
+    if (!clienteId) {
+      mensaje.textContent = "Selecciona un cliente.";
+      mensaje.style.color = '#dc2626';
+      return;
+    }
+
+    mensaje.textContent = "Creando...";
+    mensaje.style.color = '#555';
+
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+
+      await db.collection('servicios').add({
+        clienteId: clienteId,
+        tecnicoId: auth.currentUser.uid,
+        tipoServicio: document.getElementById('fp-tipo').value,
+        observaciones: document.getElementById('fp-observaciones').value.trim(),
+        estado: 'pendiente',
+        fecha: hoy,
+        prioritario: true,
+        creadoPor: 'tecnico'
+      });
+
+      document.getElementById('fp-observaciones').value = '';
+      mensaje.textContent = "";
+      ocultarFormularioPrioritario();
+      cargarServiciosTecnico(auth.currentUser.uid);
+      cargarHistorialTecnico(auth.currentUser.uid);
+    } catch (error) {
+      mensaje.textContent = "Error al crear el servicio: " + error.message;
+      mensaje.style.color = '#dc2626';
+    }
+  }
+
   // ===== CARGAR SERVICIOS (vista técnico, solo los suyos) =====
   async function cargarServiciosTecnico(uid) {
     const contenedor = document.getElementById('lista-servicios-tecnico');
@@ -1201,7 +1317,8 @@
         .join('');
 
       contenedor.innerHTML += `
-        <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${s.clienteId}')">
+        <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : ''}" onclick="abrirDetalleCliente('${s.clienteId}')">
+          ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO</span>' : ''}
           <h3>${s.tipoServicio || 'Servicio'} — ${nombreCliente}</h3>
           <p>${s.observaciones || ''}</p>
           ${s.foto ? `<img class="vista-previa-foto" src="${s.foto}">` : ''}
@@ -1254,7 +1371,8 @@
       const estadoTexto = nombresEstado[s.estado] || s.estado;
 
       contenedor.innerHTML += `
-        <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${s.clienteId}')">
+        <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : ''}" onclick="abrirDetalleCliente('${s.clienteId}')">
+          ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO</span>' : ''}
           <h3>${item.nombreCliente}</h3>
           <p>${s.tipoServicio || ''} — ${s.fecha || '(sin fecha)'}</p>
           <span class="etiqueta-estado ${estadoClase}">${estadoTexto}</span>
