@@ -402,6 +402,25 @@
       <div id="panel-admin" class="oculto">
         <h3 class="titulo-seccion">Clientes</h3>
         <button class="boton-nuevo" onclick="mostrarFormularioCliente()">+ Nuevo cliente</button>
+        <button class="boton-nuevo" style="background:#7c3aed;" onclick="mostrarImportador()">📤 Importar varios clientes (Excel/CSV)</button>
+
+        <div class="formulario oculto" id="form-importar">
+          <h3 style="margin-top:0; color:#7c3aed;">Importar clientes desde un archivo</h3>
+          <p style="font-size:13px; color:#555;">
+            1. Abre tu lista de clientes en Excel o Google Sheets.<br>
+            2. Asegúrate de que la primera fila tenga estos nombres de columna exactos (el orden no importa):<br>
+            <code style="font-size:11px;">codigo, nombre, empresa, direccion, barrio, ciudad, telefono, celular, correo, fechaIngreso, equipos, observaciones</code><br>
+            3. Guarda el archivo como <strong>CSV</strong> (Archivo → Descargar → Valores separados por comas).<br>
+            4. Súbelo aquí abajo.
+          </p>
+          <input type="file" accept=".csv" id="fi-archivo-csv" onchange="leerArchivoCSV()">
+          <div id="vista-previa-importar"></div>
+          <div class="fila-botones">
+            <button class="boton-cancelar" onclick="ocultarImportador()">Cancelar</button>
+            <button id="boton-confirmar-importar" class="oculto" style="background:#7c3aed;" onclick="confirmarImportacion()">Importar clientes</button>
+          </div>
+          <p id="mensaje-importar"></p>
+        </div>
 
         <div class="formulario oculto" id="form-cliente">
           <h3 id="titulo-form-cliente" style="margin-top:0; color: var(--azul-rey);">Nuevo cliente</h3>
@@ -490,6 +509,7 @@
           <button type="button" id="filtro-pendiente" class="filtro-chip" onclick="cambiarFiltroEstadoAdmin('pendiente')">Pendientes</button>
           <button type="button" id="filtro-en_progreso" class="filtro-chip" onclick="cambiarFiltroEstadoAdmin('en_progreso')">En progreso</button>
           <button type="button" id="filtro-terminado" class="filtro-chip" onclick="cambiarFiltroEstadoAdmin('terminado')">Terminados</button>
+          <button type="button" id="filtro-archivados" class="filtro-chip" onclick="cambiarFiltroEstadoAdmin('archivados')">🗄️ Archivados</button>
         </div>
 
         <label style="font-size:13px; display:flex; align-items:center; gap:6px; margin-bottom:14px;">
@@ -671,6 +691,124 @@
     }
   });
 
+  // ===== IMPORTAR VARIOS CLIENTES DESDE UN ARCHIVO CSV =====
+  let clientesParaImportar = [];
+
+  function mostrarImportador() {
+    document.getElementById('form-importar').classList.remove('oculto');
+  }
+
+  function ocultarImportador() {
+    document.getElementById('form-importar').classList.add('oculto');
+    document.getElementById('vista-previa-importar').innerHTML = '';
+    document.getElementById('mensaje-importar').textContent = '';
+    document.getElementById('boton-confirmar-importar').classList.add('oculto');
+    document.getElementById('fi-archivo-csv').value = '';
+    clientesParaImportar = [];
+  }
+
+  // Lee el archivo que el usuario eligió y lo convierte en una lista de clientes
+  function leerArchivoCSV() {
+    const archivo = document.getElementById('fi-archivo-csv').files[0];
+    if (!archivo) return;
+
+    const vistaPrevia = document.getElementById('vista-previa-importar');
+    vistaPrevia.innerHTML = 'Leyendo archivo...';
+
+    const lector = new FileReader();
+    lector.onload = (evento) => {
+      try {
+        clientesParaImportar = parsearCSV(evento.target.result);
+
+        if (clientesParaImportar.length === 0) {
+          vistaPrevia.innerHTML = '<p style="color:#dc2626;">No se encontró ningún cliente válido en el archivo (revisa que tenga la columna "nombre" llena).</p>';
+          return;
+        }
+
+        // Mostramos un ejemplo de los primeros 3, para que confirmes que se leyó bien
+        const ejemplos = clientesParaImportar.slice(0, 3)
+          .map(c => `• ${c.codigo ? '[' + c.codigo + '] ' : ''}${c.nombre}`)
+          .join('<br>');
+
+        vistaPrevia.innerHTML = `
+          <p style="color:green; font-weight:bold;">Se encontraron ${clientesParaImportar.length} clientes listos para importar.</p>
+          <p style="font-size:13px;">Ejemplos:<br>${ejemplos}${clientesParaImportar.length > 3 ? '<br>...' : ''}</p>
+        `;
+        document.getElementById('boton-confirmar-importar').classList.remove('oculto');
+      } catch (error) {
+        vistaPrevia.innerHTML = `<p style="color:#dc2626;">No se pudo leer el archivo: ${error.message}</p>`;
+      }
+    };
+    lector.readAsText(archivo, 'UTF-8');
+  }
+
+  // Convierte el texto plano de un CSV en una lista de objetos {nombre, empresa, ...}
+  function parsearCSV(texto) {
+    const lineas = texto.split(/\r?\n/).filter(l => l.trim() !== '');
+    if (lineas.length < 2) throw new Error('El archivo está vacío o solo tiene encabezados.');
+
+    // Detectamos si el archivo usa comas o punto y coma como separador
+    const delimitador = lineas[0].includes(';') ? ';' : ',';
+
+    const encabezados = lineas[0].split(delimitador).map(h => h.trim().toLowerCase().replace(/"/g, ''));
+    const camposValidos = ['codigo', 'nombre', 'empresa', 'direccion', 'barrio', 'ciudad', 'telefono', 'celular', 'correo', 'fechaingreso', 'equipos', 'observaciones'];
+
+    const resultado = [];
+    for (let i = 1; i < lineas.length; i++) {
+      const valores = lineas[i].split(delimitador);
+      const cliente = {};
+
+      encabezados.forEach((campo, indice) => {
+        const valor = (valores[indice] || '').trim().replace(/^"|"$/g, '');
+        if (campo === 'fechaingreso') {
+          cliente.fechaIngreso = valor;
+        } else if (camposValidos.includes(campo)) {
+          cliente[campo] = valor;
+        }
+      });
+
+      if (cliente.nombre) resultado.push(cliente);
+    }
+    return resultado;
+  }
+
+  // Sube todos los clientes leídos a Firestore, en grupos (Firestore permite máximo 500 por lote)
+  async function confirmarImportacion() {
+    const mensaje = document.getElementById('mensaje-importar');
+    if (clientesParaImportar.length === 0) return;
+
+    mensaje.style.color = '#555';
+    mensaje.textContent = 'Importando, no cierres esta pantalla...';
+
+    try {
+      const tamanoDelGrupo = 450;
+      let importados = 0;
+
+      for (let i = 0; i < clientesParaImportar.length; i += tamanoDelGrupo) {
+        const lote = db.batch();
+        const grupo = clientesParaImportar.slice(i, i + tamanoDelGrupo);
+
+        grupo.forEach((cliente) => {
+          const nuevaReferencia = db.collection('Clientes').doc();
+          lote.set(nuevaReferencia, cliente);
+        });
+
+        await lote.commit();
+        importados += grupo.length;
+        mensaje.textContent = `Importados ${importados} de ${clientesParaImportar.length}...`;
+      }
+
+      mensaje.style.color = 'green';
+      mensaje.textContent = `¡Listo! Se importaron ${importados} clientes correctamente.`;
+      clientesParaImportar = [];
+      document.getElementById('boton-confirmar-importar').classList.add('oculto');
+      cargarClientes();
+    } catch (error) {
+      mensaje.style.color = '#dc2626';
+      mensaje.textContent = 'Error al importar: ' + error.message;
+    }
+  }
+
   // ===== FORMULARIO: NUEVO CLIENTE (o EDITAR, si se pasa un id) =====
   function mostrarFormularioCliente() {
     clienteEnEdicion = null;
@@ -817,7 +955,8 @@
         tipoServicio: document.getElementById('fs-tipo').value,
         observaciones: document.getElementById('fs-observaciones').value.trim(),
         estado: 'pendiente',
-        fecha: hoy
+        fecha: hoy,
+        historialEstados: [{ estado: 'pendiente', fecha: hoy }]
       });
 
       document.getElementById('fs-observaciones').value = '';
@@ -830,10 +969,39 @@
     }
   }
 
-  // ===== CAMBIAR EL ESTADO DE UN SERVICIO =====
+  // ===== CAMBIAR EL ESTADO DE UN SERVICIO (y guardar la fecha exacta de ese cambio) =====
   async function cambiarEstadoServicio(servicioId, nuevoEstado) {
-    await db.collection('servicios').doc(servicioId).update({ estado: nuevoEstado });
-    cargarServiciosAdmin();
+    const hoy = new Date().toISOString().slice(0, 10);
+
+    // Agregamos este cambio a la línea de tiempo del servicio, sin borrar los cambios anteriores.
+    // Así queda registrado, por ejemplo: "en_progreso: 15 de agosto" y luego "terminado: 16 de agosto".
+    await db.collection('servicios').doc(servicioId).update({
+      estado: nuevoEstado,
+      historialEstados: firebase.firestore.FieldValue.arrayUnion({ estado: nuevoEstado, fecha: hoy })
+    });
+
+    // Refrescamos cualquier lista que esté visible en pantalla en este momento
+    if (!document.getElementById('panel-admin').classList.contains('oculto')) {
+      cargarServiciosAdmin();
+    }
+    if (!document.getElementById('panel-tecnico').classList.contains('oculto')) {
+      cargarServiciosTecnico(auth.currentUser.uid);
+      cargarHistorialTecnico(auth.currentUser.uid);
+    }
+  }
+
+  // Convierte el arreglo historialEstados en una lista de texto fácil de leer
+  function renderizarLineaDeTiempo(historialEstados) {
+    if (!historialEstados || historialEstados.length === 0) return '';
+
+    // Ordenamos por fecha, de la más antigua a la más reciente
+    const ordenado = [...historialEstados].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+
+    const filas = ordenado.map(h =>
+      `<p style="margin:2px 0; font-size:12px; color:#555;">▸ ${nombresEstado[h.estado] || h.estado}: ${h.fecha}</p>`
+    ).join('');
+
+    return `<div style="margin-top:6px; border-top:1px dashed #ccc; padding-top:6px;">${filas}</div>`;
   }
 
   // ===== FORMULARIO: NUEVO TÉCNICO =====
@@ -1036,10 +1204,11 @@
       htmlHistorial = visitas.map((v) => `
         <div class="item-historial" style="${v.prioritario ? 'border-left-color:#dc2626;' : ''}">
           ${v.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO — creado por el técnico</span>' : ''}
-          <p class="fecha-historial">${v.fecha || 'Sin fecha'} — ${nombresEstado[v.estado] || v.estado}</p>
+          <p class="fecha-historial">Creado: ${v.fecha || 'Sin fecha'} — Estado actual: ${nombresEstado[v.estado] || v.estado}</p>
           <p>Servicio: ${v.tipoServicio || '-'}</p>
           <p>Técnico: ${v.nombreTecnico}</p>
           <p>${v.observaciones || '(sin observaciones)'}</p>
+          ${renderizarLineaDeTiempo(v.historialEstados)}
           ${v.foto ? `<img class="vista-previa-foto" src="${v.foto}">` : ''}
         </div>
       `).join('');
@@ -1140,30 +1309,66 @@
         .map(op => `<option value="${op}" ${s.estado === op ? 'selected' : ''}>${nombresEstado[op]}</option>`)
         .join('');
 
+      // Si el servicio está archivado, mostramos botones de "Restaurar" y "Eliminar definitivo".
+      // Si no, mostramos "Archivar" y "Eliminar".
+      const botonesGestion = s.archivado
+        ? `<button class="pequeno" onclick="event.stopPropagation(); restaurarServicio('${item.id}')">♻️ Restaurar</button>
+           <button class="pequeno boton-eliminar" onclick="event.stopPropagation(); eliminarServicioDefinitivo('${item.id}')">🗑️ Eliminar definitivo</button>`
+        : `<button class="pequeno" onclick="event.stopPropagation(); archivarServicio('${item.id}')">🗄️ Archivar</button>
+           <button class="pequeno boton-eliminar" onclick="event.stopPropagation(); eliminarServicioDefinitivo('${item.id}')">🗑️ Eliminar</button>`;
+
       contenedor.innerHTML += `
         <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : (s.estado === 'terminado' ? 'tarjeta-terminada' : 'tarjeta-abierta')}" onclick="abrirDetalleCliente('${s.clienteId}')">
+          ${s.archivado ? '<span class="etiqueta-prioritario" style="background:#6b7280;">🗄️ ARCHIVADO</span>' : ''}
           ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO — creado por el técnico</span>' : ''}
           <h3>${s.tipoServicio || 'Servicio'} — ${item.nombreCliente}</h3>
           <p>Técnico: ${item.nombreTecnico}</p>
-          <p>Fecha: ${s.fecha || '(sin fecha registrada)'}</p>
+          <p>Fecha de creación: ${s.fecha || '(sin fecha registrada)'}</p>
+          ${renderizarLineaDeTiempo(s.historialEstados)}
           <p>${s.observaciones || ''}</p>
           ${s.foto ? `<img class="vista-previa-foto" src="${s.foto}">` : ''}
           <select class="selector-estado" onclick="event.stopPropagation()" onchange="cambiarEstadoServicio('${item.id}', this.value)">
             ${opciones}
           </select>
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+            ${botonesGestion}
+          </div>
         </div>
       `;
     });
   }
 
-  // ===== FILTROS COMBINADOS DE LA SECCIÓN "SERVICIOS" (texto + estado + semana) =====
+  // ===== ARCHIVAR / RESTAURAR / ELIMINAR UN SERVICIO =====
+
+  // Archivar: lo saca de la vista principal, pero el registro sigue existiendo
+  // (se puede recuperar) y sigue apareciendo en el historial del cliente.
+  async function archivarServicio(servicioId) {
+    await db.collection('servicios').doc(servicioId).update({ archivado: true });
+    cargarServiciosAdmin();
+  }
+
+  async function restaurarServicio(servicioId) {
+    await db.collection('servicios').doc(servicioId).update({ archivado: false });
+    cargarServiciosAdmin();
+  }
+
+  // Eliminar: borra el servicio para siempre, incluyendo del historial del cliente.
+  async function eliminarServicioDefinitivo(servicioId) {
+    const confirmar = confirm('¿Seguro que quieres eliminar este servicio? Esta acción no se puede deshacer y también desaparecerá del historial del cliente.');
+    if (!confirmar) return;
+
+    await db.collection('servicios').doc(servicioId).delete();
+    cargarServiciosAdmin();
+  }
+
+  // ===== FILTROS COMBINADOS DE LA SECCIÓN "SERVICIOS" (texto + estado + semana + archivados) =====
   let filtroEstadoAdmin = 'todos';
 
   function cambiarFiltroEstadoAdmin(estado) {
     filtroEstadoAdmin = estado;
 
     // Actualizamos visualmente cuál botón está activo
-    ['todos', 'pendiente', 'en_progreso', 'terminado'].forEach((e) => {
+    ['todos', 'pendiente', 'en_progreso', 'terminado', 'archivados'].forEach((e) => {
       document.getElementById('filtro-' + e).classList.remove('filtro-activo');
     });
     document.getElementById('filtro-' + estado).classList.add('filtro-activo');
@@ -1186,9 +1391,18 @@
 
     const filtrados = serviciosAdminCache.filter((item) => {
       const s = item.data;
+      const estaArchivado = !!s.archivado;
+
+      // La pestaña "Archivados" es especial: solo muestra los archivados, ignora los demás filtros
+      if (filtroEstadoAdmin === 'archivados') {
+        const coincideTexto = !texto || item.nombreCliente.toLowerCase().includes(texto);
+        return estaArchivado && coincideTexto;
+      }
+
+      // En cualquier otra pestaña, los servicios archivados quedan ocultos
+      if (estaArchivado) return false;
 
       const coincideTexto = !texto || item.nombreCliente.toLowerCase().includes(texto);
-
       const coincideEstado = filtroEstadoAdmin === 'todos' || s.estado === filtroEstadoAdmin;
 
       // El filtro de "esta semana" no aplica a los que ya están terminados,
@@ -1347,7 +1561,8 @@
         estado: 'pendiente',
         fecha: hoy,
         prioritario: true,
-        creadoPor: 'tecnico'
+        creadoPor: 'tecnico',
+        historialEstados: [{ estado: 'pendiente', fecha: hoy }]
       });
 
       document.getElementById('fp-observaciones').value = '';
@@ -1402,6 +1617,7 @@
           ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO</span>' : ''}
           <h3>${s.tipoServicio || 'Servicio'} — ${nombreCliente}</h3>
           <p>${s.observaciones || ''}</p>
+          ${renderizarLineaDeTiempo(s.historialEstados)}
           ${s.foto ? `<img class="vista-previa-foto" src="${s.foto}">` : ''}
           <select class="selector-estado" onclick="event.stopPropagation()" onchange="cambiarEstadoServicio('${doc.id}', this.value)">
             ${opciones}
