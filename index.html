@@ -42,12 +42,12 @@
     margin: 60px auto;
   }
 
-  .caja-login h1 { color: var(--azul-rey); margin-bottom: 5px; }
+  .caja-login h1 { color: var(--azul-rey); margin-bottom: 5px; margin-top: 0; }
 
   .logo-login {
     max-width: 140px;
     max-height: 140px;
-    margin-bottom: 12px;
+    margin-bottom: -6px;
   }
 
   .logo-encabezado {
@@ -585,7 +585,7 @@
 
         <h3 class="titulo-seccion">Historial de clientes atendidos</h3>
         <label style="font-size:13px; color:#555; display:block; margin-top:8px;">Filtrar por mes</label>
-        <input type="month" id="th-mes" oninput="filtrarHistorialTecnico()">
+        <input type="month" id="th-mes" onchange="filtrarHistorialTecnico()" oninput="filtrarHistorialTecnico()">
         <input type="text" id="th-buscador" placeholder="🔎 Buscar por nombre de cliente..." oninput="filtrarHistorialTecnico()">
         <div id="lista-historial-tecnico"></div>
       </div>
@@ -1733,7 +1733,9 @@
     // Ordenamos del más reciente al más antiguo
     historialTecnicoCache.sort((a, b) => (b.data.fecha || '').localeCompare(a.data.fecha || ''));
 
-    dibujarHistorialTecnico(historialTecnicoCache);
+    // Volvemos a aplicar el filtro que el técnico tuviera activo (mes y/o texto),
+    // en vez de mostrar la lista completa cada vez que se recarga
+    filtrarHistorialTecnico();
   }
 
   function dibujarHistorialTecnico(lista) {
