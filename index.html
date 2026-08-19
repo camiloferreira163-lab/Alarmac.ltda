@@ -403,16 +403,19 @@
     <img src="1000129225.png" alt="Logo Alarmac" class="logo-login">
     <h1>Alarmac</h1>
     <p>Sistema de gestión técnica</p>
-    <input type="email" id="campo-correo" placeholder="Correo electrónico">
 
-    <div class="campo-clave-contenedor">
-      <input type="password" id="campo-clave" placeholder="Contraseña">
-      <button type="button" class="boton-ojo" onclick="alternarClave()">👁️</button>
-    </div>
+    <form id="formulario-login" autocomplete="on" onsubmit="return manejarEnvioLogin(event)">
+      <input type="email" id="campo-correo" name="email" autocomplete="username" placeholder="Correo electrónico">
 
-    <button type="button" class="link-olvide" onclick="olvideClave()">¿Olvidaste tu contraseña?</button>
+      <div class="campo-clave-contenedor">
+        <input type="password" id="campo-clave" name="password" autocomplete="current-password" placeholder="Contraseña">
+        <button type="button" class="boton-ojo" onclick="alternarClave()">👁️</button>
+      </div>
 
-    <button class="ancho" onclick="iniciarSesion()">Iniciar sesión</button>
+      <button type="button" class="link-olvide" onclick="olvideClave()">¿Olvidaste tu contraseña?</button>
+
+      <button type="submit" class="ancho">Iniciar sesión</button>
+    </form>
     <p id="mensaje-error"></p>
     <p id="mensaje-info"></p>
   </div>
@@ -640,6 +643,15 @@
   };
 
   // ===== LOGIN =====
+  // Se ejecuta cuando se envía el formulario (al tocar "Iniciar sesión" o el botón Enter del teclado).
+  // Usamos un formulario real (en vez de solo un botón) para que Chrome/Android
+  // reconozca el inicio de sesión y te ofrezca guardar la contraseña.
+  function manejarEnvioLogin(evento) {
+    evento.preventDefault(); // evita que la página se recargue
+    iniciarSesion();
+    return false;
+  }
+
   function iniciarSesion() {
     const correo = document.getElementById('campo-correo').value;
     const clave = document.getElementById('campo-clave').value;
