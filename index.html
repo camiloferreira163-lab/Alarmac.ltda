@@ -43,6 +43,20 @@
   }
 
   .caja-login h1 { color: var(--azul-rey); margin-bottom: 5px; }
+
+  .logo-login {
+    max-width: 140px;
+    max-height: 140px;
+    margin-bottom: 12px;
+  }
+
+  .logo-encabezado {
+    max-width: 44px;
+    max-height: 44px;
+    border-radius: 8px;
+    background: var(--blanco);
+    padding: 3px;
+  }
   .caja-login p { color: var(--gris-texto); margin-top: 0; margin-bottom: 25px; }
 
   input {
@@ -362,12 +376,31 @@
     background: var(--azul-rey);
     color: var(--blanco);
   }
+
+  .grupo-por-dia {
+    margin-bottom: 14px;
+  }
+
+  .encabezado-grupo-dia {
+    width: 100%;
+    text-align: left;
+    background: var(--azul-rey);
+    color: var(--blanco);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
 </style>
 </head>
 <body>
 
   <!-- ===== PANTALLA DE LOGIN ===== -->
   <div class="caja-login" id="pantalla-login">
+    <img src="1000129225.png" alt="Logo Alarmac" class="logo-login">
     <h1>Alarmac</h1>
     <p>Sistema de gestión técnica</p>
     <input type="email" id="campo-correo" placeholder="Correo electrónico">
@@ -389,9 +422,12 @@
   <!-- ===== APP PRINCIPAL (después de iniciar sesión) ===== -->
   <div id="app-principal" class="oculto">
     <div class="encabezado">
-      <div>
-        <h2 id="titulo-panel">Alarmac</h2>
-        <span id="texto-usuario"></span>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <img src="1000129225.png" alt="Logo" class="logo-encabezado">
+        <div>
+          <h2 id="titulo-panel">Alarmac</h2>
+          <span id="texto-usuario"></span>
+        </div>
       </div>
       <button class="secundario pequeno" onclick="cerrarSesion()">Salir</button>
     </div>
@@ -1595,37 +1631,84 @@
       return;
     }
 
-    contenedor.innerHTML = '';
+    // Buscamos el nombre del cliente de cada servicio y los agrupamos por su fecha de creación,
+    // así el técnico ve "por día" en vez de un listado plano gigante y confuso
+    const grupos = {}; // { "2026-08-16": [ {id, data, nombreCliente}, ... ], ... }
+
     for (const doc of docsActivos) {
       const s = doc.data();
-      const estadoClase = 'estado-' + (s.estado || 'pendiente');
-      const estadoTexto = nombresEstado[s.estado] || s.estado;
-
-      // Buscamos el nombre del cliente para mostrarlo en la tarjeta
       let nombreCliente = '(cliente no encontrado)';
       if (s.clienteId) {
         const clienteDoc = await db.collection('Clientes').doc(s.clienteId).get();
         if (clienteDoc.exists) nombreCliente = clienteDoc.data().nombre;
       }
 
-      const opciones = ['pendiente', 'en_camino', 'en_progreso', 'terminado']
-        .map(op => `<option value="${op}" ${s.estado === op ? 'selected' : ''}>${nombresEstado[op]}</option>`)
-        .join('');
+      const clave = s.fecha || 'Sin fecha';
+      if (!grupos[clave]) grupos[clave] = [];
+      grupos[clave].push({ id: doc.id, data: s, nombreCliente });
+    }
 
-      contenedor.innerHTML += `
-        <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : ''}" onclick="abrirDetalleCliente('${s.clienteId}')">
-          ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO</span>' : ''}
-          <h3>${s.tipoServicio || 'Servicio'} — ${nombreCliente}</h3>
-          <p>${s.observaciones || ''}</p>
-          ${renderizarLineaDeTiempo(s.historialEstados)}
-          ${s.foto ? `<img class="vista-previa-foto" src="${s.foto}">` : ''}
-          <select class="selector-estado" onclick="event.stopPropagation()" onchange="cambiarEstadoServicio('${doc.id}', this.value)">
-            ${opciones}
-          </select>
-          <br>
-          <button class="pequeno" style="margin-top:8px;" onclick="event.stopPropagation(); abrirFormularioInforme('${doc.id}')">📝 Actualizar informe y foto</button>
+    // Ordenamos las fechas: la más reciente primero (así lo más urgente/nuevo queda arriba)
+    const fechasOrdenadas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
+
+    const hoy = new Date().toISOString().slice(0, 10);
+
+    contenedor.innerHTML = fechasOrdenadas.map((fecha, indice) => {
+      const items = grupos[fecha];
+      const etiquetaFecha = fecha === hoy ? `${fecha} (Hoy)` : fecha;
+      const idGrupo = 'grupo-tecnico-' + indice;
+
+      const tarjetasHtml = items.map((item) => {
+        const s = item.data;
+        const opciones = ['pendiente', 'en_camino', 'en_progreso', 'terminado']
+          .map(op => `<option value="${op}" ${s.estado === op ? 'selected' : ''}>${nombresEstado[op]}</option>`)
+          .join('');
+
+        return `
+          <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : ''}" onclick="abrirDetalleCliente('${s.clienteId}')">
+            ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO</span>' : ''}
+            <h3>${s.tipoServicio || 'Servicio'} — ${item.nombreCliente}</h3>
+            <p>${s.observaciones || ''}</p>
+            ${renderizarLineaDeTiempo(s.historialEstados)}
+            ${s.foto ? `<img class="vista-previa-foto" src="${s.foto}">` : ''}
+            <select class="selector-estado" onclick="event.stopPropagation()" onchange="cambiarEstadoServicio('${item.id}', this.value)">
+              ${opciones}
+            </select>
+            <br>
+            <button class="pequeno" style="margin-top:8px;" onclick="event.stopPropagation(); abrirFormularioInforme('${item.id}')">📝 Actualizar informe y foto</button>
+          </div>
+        `;
+      }).join('');
+
+      // El grupo de "Hoy" empieza abierto; los demás días empiezan cerrados,
+      // para que la pantalla no se sienta saturada al entrar
+      const abierto = fecha === hoy;
+
+      return `
+        <div class="grupo-por-dia">
+          <button type="button" class="encabezado-grupo-dia" onclick="alternarGrupoDia('${idGrupo}')">
+            📅 ${etiquetaFecha} (${items.length}) <span id="${idGrupo}-flecha">${abierto ? '▲' : '▼'}</span>
+          </button>
+          <div id="${idGrupo}" class="${abierto ? '' : 'oculto'}">
+            ${tarjetasHtml}
+          </div>
         </div>
       `;
+    }).join('');
+  }
+
+  // Abre o cierra un grupo de servicios de un día específico
+  function alternarGrupoDia(idGrupo) {
+    const contenido = document.getElementById(idGrupo);
+    const flecha = document.getElementById(idGrupo + '-flecha');
+    const estaOculto = contenido.classList.contains('oculto');
+
+    if (estaOculto) {
+      contenido.classList.remove('oculto');
+      flecha.textContent = '▲';
+    } else {
+      contenido.classList.add('oculto');
+      flecha.textContent = '▼';
     }
   }
 
