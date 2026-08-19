@@ -617,6 +617,17 @@
   const auth = firebase.auth();
   const db = firebase.firestore();
 
+  // ===== SEGURIDAD: convierte cualquier texto en "texto plano seguro" =====
+  // Esto evita que alguien escriba código malicioso en un campo (nombre, observaciones, etc.)
+  // y que ese código se ejecute en la pantalla de otra persona que lo vea después.
+  // SIEMPRE usar esta función cuando insertamos texto de la base de datos dentro del HTML.
+  function esc(texto) {
+    if (texto === null || texto === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(texto);
+    return div.innerHTML;
+  }
+
   // Una segunda "conexión" a Firebase, usada SOLO para crear técnicos.
   // Esto evita que, al crear un usuario nuevo, se cierre tu sesión de administrador
   // (Firebase por defecto inicia sesión automáticamente con el usuario recién creado).
@@ -775,7 +786,7 @@
 
         // Mostramos un ejemplo de los primeros 3, para que confirmes que se leyó bien
         const ejemplos = clientesParaImportar.slice(0, 3)
-          .map(c => `• ${c.codigo ? '[' + c.codigo + '] ' : ''}${c.nombre}`)
+          .map(c => `• ${c.codigo ? '[' + esc(c.codigo) + '] ' : ''}${esc(c.nombre)}`)
           .join('<br>');
 
         vistaPrevia.innerHTML = `
@@ -956,7 +967,7 @@
     selectCliente.innerHTML = '';
     clientesSnap.forEach((doc) => {
       const c = doc.data();
-      selectCliente.innerHTML += `<option value="${doc.id}">${c.nombre}</option>`;
+      selectCliente.innerHTML += `<option value="${doc.id}">${esc(c.nombre)}</option>`;
     });
     if (clientesSnap.empty) {
       selectCliente.innerHTML = '<option value="">No hay clientes creados todavía</option>';
@@ -969,7 +980,7 @@
     selectTecnico.innerHTML = '';
     tecnicosSnap.forEach((doc) => {
       const t = doc.data();
-      selectTecnico.innerHTML += `<option value="${doc.id}">${t.nombre}</option>`;
+      selectTecnico.innerHTML += `<option value="${doc.id}">${esc(t.nombre)}</option>`;
     });
     if (tecnicosSnap.empty) {
       selectTecnico.innerHTML = '<option value="">No hay técnicos creados todavía</option>';
@@ -1130,8 +1141,8 @@
       const t = doc.data();
       contenedor.innerHTML += `
         <div class="tarjeta">
-          <h3>${t.nombre}</h3>
-          <p>${t.correo}</p>
+          <h3>${esc(t.nombre)}</h3>
+          <p>${esc(t.correo)}</p>
         </div>
       `;
     });
@@ -1207,9 +1218,9 @@
       const c = item.data;
       contenedor.innerHTML += `
         <div class="tarjeta tarjeta-clicable" onclick="abrirDetalleCliente('${item.id}')">
-          <h3>${c.codigo ? '[' + c.codigo + '] ' : ''}${c.nombre || '(sin nombre)'}</h3>
-          <p>${c.empresa || ''}</p>
-          <p>${c.barrio || ''}, ${c.ciudad || ''}</p>
+          <h3>${c.codigo ? '[' + esc(c.codigo) + '] ' : ''}${esc(c.nombre) || '(sin nombre)'}</h3>
+          <p>${esc(c.empresa)}</p>
+          <p>${esc(c.barrio)}, ${esc(c.ciudad)}</p>
         </div>
       `;
     });
@@ -1253,9 +1264,9 @@
         <div class="item-historial" style="${v.prioritario ? 'border-left-color:#dc2626;' : ''}">
           ${v.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO — creado por el técnico</span>' : ''}
           <p class="fecha-historial">Creado: ${v.fecha || 'Sin fecha'} — Estado actual: ${nombresEstado[v.estado] || v.estado}</p>
-          <p>Servicio: ${v.tipoServicio || '-'}</p>
-          <p>Técnico: ${v.nombreTecnico}</p>
-          <p>${v.observaciones || '(sin observaciones)'}</p>
+          <p>Servicio: ${esc(v.tipoServicio) || '-'}</p>
+          <p>Técnico: ${esc(v.nombreTecnico)}</p>
+          <p>${esc(v.observaciones) || '(sin observaciones)'}</p>
           ${renderizarLineaDeTiempo(v.historialEstados)}
           ${v.foto ? `<img class="vista-previa-foto" src="${v.foto}">` : ''}
         </div>
@@ -1277,17 +1288,17 @@
     document.getElementById('modal-cliente').innerHTML = `
       <div class="fondo-modal" onclick="if(event.target === this) cerrarModalCliente()">
         <div class="caja-modal">
-          <h2>${c.codigo ? '[' + c.codigo + '] ' : ''}${c.nombre || '(sin nombre)'}</h2>
-          <p><strong>Empresa:</strong> ${c.empresa || '-'}</p>
-          <p><strong>Dirección:</strong> ${c.direccion || '-'}</p>
-          <p><strong>Barrio:</strong> ${c.barrio || '-'}</p>
-          <p><strong>Ciudad:</strong> ${c.ciudad || '-'}</p>
-          <p><strong>Teléfono:</strong> ${c.telefono || '-'}</p>
-          <p><strong>Celular:</strong> ${c.celular || '-'}</p>
-          <p><strong>Correo:</strong> ${c.correo || '-'}</p>
+          <h2>${c.codigo ? '[' + esc(c.codigo) + '] ' : ''}${esc(c.nombre) || '(sin nombre)'}</h2>
+          <p><strong>Empresa:</strong> ${esc(c.empresa) || '-'}</p>
+          <p><strong>Dirección:</strong> ${esc(c.direccion) || '-'}</p>
+          <p><strong>Barrio:</strong> ${esc(c.barrio) || '-'}</p>
+          <p><strong>Ciudad:</strong> ${esc(c.ciudad) || '-'}</p>
+          <p><strong>Teléfono:</strong> ${esc(c.telefono) || '-'}</p>
+          <p><strong>Celular:</strong> ${esc(c.celular) || '-'}</p>
+          <p><strong>Correo:</strong> ${esc(c.correo) || '-'}</p>
           <p><strong>Fecha de ingreso:</strong> ${c.fechaIngreso || '-'}</p>
-          <p><strong>Equipos:</strong> ${c.equipos || '-'}</p>
-          <p><strong>Observaciones:</strong> ${c.observaciones || '-'}</p>
+          <p><strong>Equipos:</strong> ${esc(c.equipos) || '-'}</p>
+          <p><strong>Observaciones:</strong> ${esc(c.observaciones) || '-'}</p>
           <a href="${linkMapa}" target="_blank" rel="noopener">
             <button type="button" class="ancho" style="background: var(--verde); margin-top: 6px;">📍 Ver ubicación en Google Maps</button>
           </a>
@@ -1369,11 +1380,11 @@
         <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : (s.estado === 'terminado' ? 'tarjeta-terminada' : 'tarjeta-abierta')}" onclick="abrirDetalleCliente('${s.clienteId}')">
           ${s.archivado ? '<span class="etiqueta-prioritario" style="background:#6b7280;">🗄️ ARCHIVADO</span>' : ''}
           ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO — creado por el técnico</span>' : ''}
-          <h3>${s.tipoServicio || 'Servicio'} — ${item.nombreCliente}</h3>
-          <p>Técnico: ${item.nombreTecnico}</p>
+          <h3>${esc(s.tipoServicio) || 'Servicio'} — ${esc(item.nombreCliente)}</h3>
+          <p>Técnico: ${esc(item.nombreTecnico)}</p>
           <p>Fecha de creación: ${s.fecha || '(sin fecha registrada)'}</p>
           ${renderizarLineaDeTiempo(s.historialEstados)}
-          <p>${s.observaciones || ''}</p>
+          <p>${esc(s.observaciones)}</p>
           ${s.foto ? `<img class="vista-previa-foto" src="${s.foto}">` : ''}
           <select class="selector-estado" onclick="event.stopPropagation()" onchange="cambiarEstadoServicio('${item.id}', this.value)">
             ${opciones}
@@ -1500,7 +1511,7 @@
         <div class="caja-modal">
           <h2>Actualizar informe</h2>
           <label>Observaciones</label>
-          <textarea id="fi-observaciones">${s.observaciones || ''}</textarea>
+          <textarea id="fi-observaciones">${esc(s.observaciones)}</textarea>
           <label>Foto (puedes tomarla directamente con la cámara)</label>
           <input type="file" accept="image/*" capture="environment" id="fi-foto" onchange="mostrarVistaPreviaFoto()">
           <img id="fi-vista-previa" class="vista-previa-foto oculto" src="${s.foto || ''}">
@@ -1574,7 +1585,7 @@
     select.innerHTML = '';
     snap.forEach((doc) => {
       const c = doc.data();
-      select.innerHTML += `<option value="${doc.id}">${c.codigo ? '[' + c.codigo + '] ' : ''}${c.nombre}</option>`;
+      select.innerHTML += `<option value="${doc.id}">${c.codigo ? '[' + esc(c.codigo) + '] ' : ''}${esc(c.nombre)}</option>`;
     });
     if (snap.empty) {
       select.innerHTML = '<option value="">No hay clientes creados todavía</option>';
@@ -1679,8 +1690,8 @@
         return `
           <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : ''}" onclick="abrirDetalleCliente('${s.clienteId}')">
             ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO</span>' : ''}
-            <h3>${s.tipoServicio || 'Servicio'} — ${item.nombreCliente}</h3>
-            <p>${s.observaciones || ''}</p>
+            <h3>${esc(s.tipoServicio) || 'Servicio'} — ${esc(item.nombreCliente)}</h3>
+            <p>${esc(s.observaciones)}</p>
             ${renderizarLineaDeTiempo(s.historialEstados)}
             ${s.foto ? `<img class="vista-previa-foto" src="${s.foto}">` : ''}
             <select class="selector-estado" onclick="event.stopPropagation()" onchange="cambiarEstadoServicio('${item.id}', this.value)">
@@ -1767,7 +1778,7 @@
       contenedor.innerHTML += `
         <div class="tarjeta tarjeta-clicable ${s.prioritario ? 'tarjeta-prioritaria' : ''}" onclick="abrirDetalleCliente('${s.clienteId}')">
           ${s.prioritario ? '<span class="etiqueta-prioritario">🚨 PRIORITARIO</span>' : ''}
-          <h3>${item.nombreCliente}</h3>
+          <h3>${esc(item.nombreCliente)}</h3>
           <p>${s.tipoServicio || ''} — ${s.fecha || '(sin fecha)'}</p>
           <span class="etiqueta-estado ${estadoClase}">${estadoTexto}</span>
         </div>
